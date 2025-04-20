@@ -1438,6 +1438,9 @@ static char *build_json(ogs_sbi_message_t *message)
         item = OpenAPI_ue_reg_status_update_rsp_data_convertToJSON(
                 message->UeRegStatusUpdateRspData);
         ogs_assert(item);
+    } else if (message->EapSession) {
+        item = OpenAPI_eap_session_convertToJSON(message->EapSession);
+        ogs_assert(item);
     }
 
     if (item) {
@@ -1590,22 +1593,35 @@ static int parse_json(ogs_sbi_message_t *message,
             CASE(OGS_SBI_RESOURCE_NAME_UE_AUTHENTICATIONS)
                 SWITCH(message->h.method)
                 CASE(OGS_SBI_HTTP_METHOD_POST)
-                    if (message->res_status == 0) {
-                        message->AuthenticationInfo =
-                            OpenAPI_authentication_info_parseFromJSON(item);
-                        if (!message->AuthenticationInfo) {
-                            rv = OGS_ERROR;
-                            ogs_error("JSON parse error");
+                    SWITCH(message->h.resource.component[2])
+                    CASE(OGS_SBI_RESOURCE_NAME_EAP_SESSION)
+                        if (message->res_status == 0 || message->res_status == OGS_SBI_HTTP_STATUS_OK) {
+                            message->EapSession = OpenAPI_eap_session_parseFromJSON(item);
+                            if (!message->EapSession) {
+                                rv = OGS_ERROR;
+                                ogs_error("JSON parse error");
+                            }
                         }
-                    } else if (message->res_status ==
-                            OGS_SBI_HTTP_STATUS_CREATED) {
-                        message->UeAuthenticationCtx =
-                        OpenAPI_ue_authentication_ctx_parseFromJSON(item);
-                        if (!message->UeAuthenticationCtx) {
-                            rv = OGS_ERROR;
-                            ogs_error("JSON parse error");
+                        break;
+                    DEFAULT
+                        if (message->res_status == 0) {
+                            message->AuthenticationInfo =
+                                OpenAPI_authentication_info_parseFromJSON(item);
+                            if (!message->AuthenticationInfo) {
+                                rv = OGS_ERROR;
+                                ogs_error("JSON parse error");
+                            }
+                        } else if (message->res_status ==
+                                OGS_SBI_HTTP_STATUS_CREATED) {
+                            message->UeAuthenticationCtx =
+                            OpenAPI_ue_authentication_ctx_parseFromJSON(item);
+                            if (!message->UeAuthenticationCtx) {
+                                rv = OGS_ERROR;
+                                ogs_error("JSON parse error");
+                            }
                         }
-                    }
+                        break;
+                    END
                     break;
                 CASE(OGS_SBI_HTTP_METHOD_PUT)
                     if (message->res_status == 0) {

@@ -36,6 +36,7 @@ typedef struct ogs_dbi_auth_info_s {
     uint8_t       amf[OGS_AMF_LEN];
     uint8_t       rand[OGS_RAND_LEN];
     uint64_t      sqn;
+    uint64_t      auth_method;
 } ogs_dbi_auth_info_t;
 
 int ogs_dbi_auth_info(char *supi, ogs_dbi_auth_info_t *auth_info);

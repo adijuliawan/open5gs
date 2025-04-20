@@ -56,11 +56,14 @@ extern "C" {
 #define OGS_AUTS_LEN                    14
 #define OGS_MAX_RES_LEN                 16
 #define OGS_MAC_S_LEN                   8
+/* Max EAP Payload size is defined in TS 24.501 9.11.2.2 */
+#define OGS_MAX_EAP_PAYLOAD_LEN         1503
 
 #define OGS_SQN_XOR_AK_LEN              6
 #define OGS_AK_LEN                      6
 #define OGS_SQN_LEN                     6
 #define OGS_MAX_SQN                     0xffffffffffff
+#define OGS_AUTH_METHOD_LEN             6
 
 #define OGS_HASH_MME_LEN                8
 

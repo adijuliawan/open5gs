@@ -356,6 +356,8 @@ ogs_pkbuf_t *gmm_build_authentication_request(amf_ue_t *amf_ue)
     ogs_nas_5gs_message_t message;
     ogs_nas_5gs_authentication_request_t *authentication_request =
         &message.gmm.authentication_request;
+    ogs_pkbuf_t *ret_pkbuf = NULL;
+    unsigned char decoded_payload[OGS_MAX_EAP_PAYLOAD_LEN] = {0};
 
     ogs_assert(amf_ue);
 
@@ -369,33 +371,103 @@ ogs_pkbuf_t *gmm_build_authentication_request(amf_ue_t *amf_ue)
     authentication_request->abba.length = amf_ue->abba_len;
     memcpy(authentication_request->abba.value, amf_ue->abba, amf_ue->abba_len);
 
-    authentication_request->presencemask |=
-    OGS_NAS_5GS_AUTHENTICATION_REQUEST_AUTHENTICATION_PARAMETER_RAND_PRESENT;
-    authentication_request->presencemask |=
-    OGS_NAS_5GS_AUTHENTICATION_REQUEST_AUTHENTICATION_PARAMETER_AUTN_PRESENT;
+    if (amf_ue->auth_type == OpenAPI_auth_type_5G_AKA) {
+        authentication_request->presencemask |=
+        OGS_NAS_5GS_AUTHENTICATION_REQUEST_AUTHENTICATION_PARAMETER_RAND_PRESENT;
+        authentication_request->presencemask |=
+        OGS_NAS_5GS_AUTHENTICATION_REQUEST_AUTHENTICATION_PARAMETER_AUTN_PRESENT;
 
-    memcpy(authentication_request->authentication_parameter_rand.rand,
-            amf_ue->rand, OGS_RAND_LEN);
-    memcpy(authentication_request->authentication_parameter_autn.autn,
-            amf_ue->autn, OGS_AUTN_LEN);
-    authentication_request->authentication_parameter_autn.length =
-            OGS_AUTN_LEN;
+        memcpy(authentication_request->authentication_parameter_rand.rand,
+                amf_ue->rand, OGS_RAND_LEN);
+        memcpy(authentication_request->authentication_parameter_autn.autn,
+                amf_ue->autn, OGS_AUTN_LEN);
+        authentication_request->authentication_parameter_autn.length =
+                OGS_AUTN_LEN;
+    } else if (amf_ue->auth_type == OpenAPI_auth_type_EAP_AKA_PRIME) {
+        authentication_request->presencemask |= OGS_NAS_5GS_AUTHENTICATION_REQUEST_EAP_MESSAGE_PRESENT;
+        authentication_request->eap_message.length = ogs_base64_decode_binary(decoded_payload, amf_ue->eap_payload);
+        authentication_request->eap_message.buffer = ogs_calloc(1, authentication_request->eap_message.length);
+        ogs_assert(authentication_request->eap_message.buffer);
+        memcpy(authentication_request->eap_message.buffer, decoded_payload, authentication_request->eap_message.length);
+        ogs_trace("    EAP-Message:");
+        ogs_log_hexdump(OGS_LOG_TRACE, authentication_request->eap_message.buffer, authentication_request->eap_message.length);
+    } else {
+        ogs_error("Unsupported Auth Type : %d", amf_ue->auth_type);
+        return NULL;
+    }
 
-    return ogs_nas_5gs_plain_encode(&message);
+    ret_pkbuf = ogs_nas_5gs_plain_encode(&message);
+    if (authentication_request->eap_message.buffer != NULL)
+        ogs_free(authentication_request->eap_message.buffer);
+    return ret_pkbuf;
 }
 
-ogs_pkbuf_t *gmm_build_authentication_reject(void)
+ogs_pkbuf_t *gmm_build_authentication_reject(amf_ue_t *amf_ue)
 {
     ogs_nas_5gs_message_t message;
+    ogs_pkbuf_t *ret_pkbuf = NULL;
+    unsigned char decoded_payload[OGS_MAX_EAP_PAYLOAD_LEN] = {0};
 
+    ogs_assert(amf_ue);
     memset(&message, 0, sizeof(message));
 
     message.gmm.h.extended_protocol_discriminator =
         OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM;
     message.gmm.h.message_type = OGS_NAS_5GS_AUTHENTICATION_REJECT;
 
-    return ogs_nas_5gs_plain_encode(&message);
+    //return ogs_nas_5gs_plain_encode(&message);
+    if (amf_ue->auth_type == OpenAPI_auth_type_EAP_AKA_PRIME) {
+        /* add eap payload */
+        ogs_nas_5gs_authentication_reject_t *authentication_reject =
+            &message.gmm.authentication_reject;
+        authentication_reject->presencemask |= OGS_NAS_5GS_AUTHENTICATION_REJECT_EAP_MESSAGE_PRESENT;
+        authentication_reject->eap_message.length = ogs_base64_decode_binary(decoded_payload, amf_ue->eap_payload);
+        authentication_reject->eap_message.buffer = ogs_calloc(1, authentication_reject->eap_message.length);
+        ogs_assert(authentication_reject->eap_message.buffer);
+        memcpy(authentication_reject->eap_message.buffer, decoded_payload, authentication_reject->eap_message.length);
+        ogs_trace("    EAP-Message:");
+        ogs_log_hexdump(OGS_LOG_TRACE, authentication_reject->eap_message.buffer, authentication_reject->eap_message.length);
+    }
+
+    ret_pkbuf = ogs_nas_5gs_plain_encode(&message);
+    if (message.gmm.authentication_reject.eap_message.buffer != NULL)
+        ogs_free(message.gmm.authentication_reject.eap_message.buffer);
+    return ret_pkbuf;
 }
+
+ogs_pkbuf_t *gmm_build_authentication_result(amf_ue_t *amf_ue)
+{
+    ogs_nas_5gs_message_t message;
+    ogs_nas_5gs_authentication_result_t *authentication_result =
+        &message.gmm.authentication_result;
+    ogs_pkbuf_t *ret_pkbuf = NULL;
+    unsigned char decoded_payload[OGS_MAX_EAP_PAYLOAD_LEN] = {0};
+
+    ogs_assert(amf_ue);
+    memset(&message, 0, sizeof(message));
+
+    message.gmm.h.extended_protocol_discriminator =
+        OGS_NAS_EXTENDED_PROTOCOL_DISCRIMINATOR_5GMM;
+    message.gmm.h.message_type = OGS_NAS_5GS_AUTHENTICATION_RESULT;
+    authentication_result->ngksi.tsc = amf_ue->nas.amf.tsc;
+    authentication_result->ngksi.value = amf_ue->nas.amf.ksi;
+    if (amf_ue->auth_result == OpenAPI_auth_result_AUTHENTICATION_SUCCESS) {
+        authentication_result->abba.length = amf_ue->abba_len;
+        memcpy(authentication_result->abba.value, amf_ue->abba, amf_ue->abba_len);
+        authentication_result->presencemask |= OGS_NAS_5GS_AUTHENTICATION_RESULT_ABBA_PRESENT;
+    }
+    authentication_result->eap_message.length = ogs_base64_decode_binary(decoded_payload, amf_ue->eap_payload);
+    authentication_result->eap_message.buffer = ogs_calloc(1, authentication_result->eap_message.length);
+    ogs_assert(authentication_result->eap_message.buffer);
+    memcpy(authentication_result->eap_message.buffer, decoded_payload, authentication_result->eap_message.length);
+    ogs_trace("    EAP-Message:");
+    ogs_log_hexdump(OGS_LOG_TRACE, authentication_result->eap_message.buffer, authentication_result->eap_message.length);
+
+    ret_pkbuf = ogs_nas_5gs_plain_encode(&message);
+    if (authentication_result->eap_message.buffer != NULL)
+        ogs_free(authentication_result->eap_message.buffer);
+    return ret_pkbuf;
+ }
 
 ogs_pkbuf_t *gmm_build_security_mode_command(amf_ue_t *amf_ue)
 {
@@ -412,6 +484,8 @@ ogs_pkbuf_t *gmm_build_security_mode_command(amf_ue_t *amf_ue)
     ogs_nas_additional_5g_security_information_t
         *additional_security_information =
             &security_mode_command->additional_security_information;
+    ogs_pkbuf_t *ret_pkbuf = NULL;
+        unsigned char decoded_payload[OGS_MAX_EAP_PAYLOAD_LEN] = {0};
 
     ogs_assert(amf_ue);
 
@@ -479,7 +553,23 @@ ogs_pkbuf_t *gmm_build_security_mode_command(amf_ue_t *amf_ue)
     ogs_kdf_nas_5gs(OGS_KDF_NAS_ENC_ALG, amf_ue->selected_enc_algorithm,
             amf_ue->kamf, amf_ue->knas_enc);
 
-    return nas_5gs_security_encode(amf_ue, &message);
+    //return nas_5gs_security_encode(amf_ue, &message);
+    if (amf_ue->auth_type == OpenAPI_auth_type_EAP_AKA_PRIME && amf_ue->eap_payload_len > 0) {
+        security_mode_command->presencemask |= OGS_NAS_5GS_SECURITY_MODE_COMMAND_EAP_MESSAGE_PRESENT;
+        security_mode_command->eap_message.length = ogs_base64_decode_binary(decoded_payload, amf_ue->eap_payload);
+        security_mode_command->eap_message.buffer = ogs_calloc(1, security_mode_command->eap_message.length);
+        ogs_assert(security_mode_command->eap_message.buffer);
+        memcpy(security_mode_command->eap_message.buffer, decoded_payload, security_mode_command->eap_message.length);
+        ogs_trace("    EAP-Message:");
+        ogs_log_hexdump(OGS_LOG_TRACE, security_mode_command->eap_message.buffer, security_mode_command->eap_message.length);
+        memset(amf_ue->eap_payload, 0, amf_ue->eap_payload_len);
+        amf_ue->eap_payload_len = 0;
+    }
+
+    ret_pkbuf = nas_5gs_security_encode(amf_ue, &message);
+    if (security_mode_command->eap_message.buffer != NULL)
+        ogs_free(security_mode_command->eap_message.buffer);
+    return ret_pkbuf;
 }
 
 ogs_pkbuf_t *gmm_build_configuration_update_command(

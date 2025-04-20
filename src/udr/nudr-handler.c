@@ -33,6 +33,8 @@ bool udr_nudr_dr_handle_subscription_authentication(
     char opc_string[OGS_KEYSTRLEN(OGS_KEY_LEN)];
     char amf_string[OGS_KEYSTRLEN(OGS_AMF_LEN)];
     char sqn_string[OGS_KEYSTRLEN(OGS_SQN_LEN)];
+   
+
 
     char sqn[OGS_SQN_LEN];
     char *supi = NULL;
@@ -62,8 +64,9 @@ bool udr_nudr_dr_handle_subscription_authentication(
                 recvmsg, "Unknwon SUPI Type", supi, NULL));
         return false;
     }
-
+    // query to mongodb
     rv = ogs_dbi_auth_info(supi, &auth_info);
+    //ogs_info("%s",&auth_info);
     if (rv != OGS_OK) {
         ogs_warn("[%s] Cannot find SUPI in DB", supi);
         ogs_assert(true ==
@@ -79,8 +82,19 @@ bool udr_nudr_dr_handle_subscription_authentication(
             memset(&AuthenticationSubscription, 0,
                     sizeof(AuthenticationSubscription));
 
-            AuthenticationSubscription.authentication_method =
-                OpenAPI_auth_method_5G_AKA;
+//            AuthenticationSubscription.authentication_method =
+//                OpenAPI_auth_method_5G_AKA;
+            //ogs_uint64_to_buffer(auth_info.auth_method, OGS_AUTH_METHOD_LEN, auth_method);
+            //ogs_info("auth_method %ld",auth_info.auth_method);
+            // TODO: make memory safe
+            if(auth_info.auth_method==2){
+                AuthenticationSubscription.authentication_method =
+                    OpenAPI_auth_method_EAP_AKA_PRIME;
+            }
+            else{
+                AuthenticationSubscription.authentication_method =
+                    OpenAPI_auth_method_5G_AKA;
+            }
 
             ogs_hex_to_ascii(auth_info.k, sizeof(auth_info.k),
                     k_string, sizeof(k_string));

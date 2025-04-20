@@ -128,6 +128,11 @@ amf_metrics_spec_def_t amf_metrics_spec_def_global[_AMF_METR_GLOB_MAX] = {
     .name = "fivegs_amffunction_amf_authreject",
     .description = "Number of authentication rejections sent by the AMF",
 },
+[AMF_METR_GLOB_CTR_AMF_AUTH_RESULT] = {
+    .type = OGS_METRICS_METRIC_TYPE_COUNTER,
+    .name = "fivegs_amffunction_amf_authresult",
+    .description = "Number of authentication results sent by the AMF",
+},
 [AMF_METR_GLOB_CTR_MM_CONF_UPDATE] = {
     .type = OGS_METRICS_METRIC_TYPE_COUNTER,
     .name = "fivegs_amffunction_mm_confupdate",

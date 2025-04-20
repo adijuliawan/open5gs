@@ -173,6 +173,7 @@ extern "C" {
 #define OGS_AMF_STRING "amf"
 #define OGS_RAND_STRING "rand"
 #define OGS_SQN_STRING "sqn"
+#define OGS_AUTH_METHOD_STRING "auth_method"
 
 #define OGS_MME_HOST_STRING "mme_host"
 #define OGS_MME_REALM_STRING "mme_realm"

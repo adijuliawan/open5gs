@@ -121,6 +121,7 @@ ogs_sbi_request_t *amf_nausf_auth_build_authenticate_confirmation(
 
     ogs_assert(amf_ue);
     ogs_assert(amf_ue->confirmation_for_5g_aka.resource_uri);
+    ogs_assert(amf_ue->auth_type == OpenAPI_auth_type_5G_AKA);
 
     memset(&message, 0, sizeof(message));
     message.h.method = (char *)OGS_SBI_HTTP_METHOD_PUT;
@@ -145,6 +146,47 @@ ogs_sbi_request_t *amf_nausf_auth_build_authenticate_confirmation(
 end:
     if (ConfirmationData)
         ogs_free(ConfirmationData);
+
+    return request;
+}
+
+ogs_sbi_request_t *amf_nausf_auth_build_authenticate_eap_session(
+    amf_ue_t *amf_ue, void *data)
+{
+    ogs_sbi_message_t message;
+    ogs_sbi_request_t *request = NULL;
+
+    OpenAPI_eap_session_t *EapSession = NULL;
+    char *eap_data = NULL;
+
+    ogs_assert(amf_ue);
+    ogs_assert(amf_ue->confirmation_for_5g_aka.resource_uri);
+    ogs_assert(amf_ue->auth_type == OpenAPI_auth_type_EAP_AKA_PRIME);
+
+    memset(&message, 0, sizeof(message));
+    message.h.method = (char *)OGS_SBI_HTTP_METHOD_POST;
+    /* this is going to be actually the eap-session one, not the confirmation */
+    message.h.uri = amf_ue->confirmation_for_5g_aka.resource_uri;
+
+    eap_data = ogs_calloc(1, amf_ue->eap_payload_len);
+    if (!eap_data) {
+        ogs_error("No eap_data");
+        goto end;
+    }
+    memcpy(eap_data, amf_ue->eap_payload, amf_ue->eap_payload_len);
+    EapSession = OpenAPI_eap_session_create(false, eap_data, NULL, NULL, amf_ue->auth_result, NULL, NULL, NULL, NULL);
+    if (!EapSession) {
+        ogs_error("No EapSession");
+        goto end;
+    }
+
+    message.EapSession = EapSession;
+    request = ogs_sbi_build_request(&message);
+    ogs_expect(request);
+
+    end:
+    if (EapSession)
+        OpenAPI_eap_session_free(EapSession);
 
     return request;
 }

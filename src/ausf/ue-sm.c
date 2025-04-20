@@ -89,6 +89,12 @@ void ausf_ue_state_operational(ogs_fsm_t *s, ausf_event_t *e)
         }
 
         SWITCH(message->h.method)
+        /* Previously there were only two options here: a POST message would imply
+        * an initial UeAuthCtx creation, and a PUT would imply a 5g-aka confirmation.
+        * However, now that we need to support also EAP-AKA', we need to check the
+        * resource name to determine the action to take.
+        */
+        /*
         CASE(OGS_SBI_HTTP_METHOD_POST)
             handled = ausf_nausf_auth_handle_authenticate(
                     ausf_ue, stream, message);
@@ -98,6 +104,25 @@ void ausf_ue_state_operational(ogs_fsm_t *s, ausf_event_t *e)
                 OGS_FSM_TRAN(s, ausf_ue_state_exception);
             }
             break;
+        */
+        
+        CASE(OGS_SBI_HTTP_METHOD_POST)
+            SWITCH(message->h.resource.component[2])
+            CASE(OGS_SBI_RESOURCE_NAME_EAP_SESSION)
+                handled = ausf_nausf_auth_handle_authenticate_eap_session(
+                    ausf_ue, stream, message);
+                break;
+            DEFAULT
+                handled = ausf_nausf_auth_handle_authenticate(
+                    ausf_ue, stream, message);
+            END
+            if (!handled) {
+                ogs_error("[%s] Cannot handle SBI message",
+                        ausf_ue->suci);
+                OGS_FSM_TRAN(s, ausf_ue_state_exception);
+            }
+            break;
+        
         CASE(OGS_SBI_HTTP_METHOD_PUT)
             if (!ausf_ue->supi) {
                 ogs_error("[%s] No SUPI", ausf_ue->suci);

@@ -134,6 +134,8 @@ void ausf_state_operational(ogs_fsm_t *s, ausf_event_t *e)
         CASE(OGS_SBI_SERVICE_NAME_NAUSF_AUTH)
             SWITCH(message.h.method)
             CASE(OGS_SBI_HTTP_METHOD_POST)
+                ogs_debug("[EAP_AKA_PRIME][AUSF] AUSF Method[%s]",message.h.method);
+                /*
                 if (message.AuthenticationInfo &&
                     message.AuthenticationInfo->supi_or_suci &&
                     strlen(message.AuthenticationInfo->supi_or_suci)) {
@@ -144,6 +146,28 @@ void ausf_state_operational(ogs_fsm_t *s, ausf_event_t *e)
                                 message.AuthenticationInfo->supi_or_suci);
                     }
                 }
+                break;
+                */
+                SWITCH(message.h.resource.component[2])
+                CASE(OGS_SBI_RESOURCE_NAME_EAP_SESSION)
+                    ogs_debug("[EAP_AKA_PRIME][AUSF] Prepare response eap authenticate");
+                    if (message.h.resource.component[1]) {
+                        ausf_ue = ausf_ue_find_by_ctx_id(
+                                message.h.resource.component[1]);
+                    }
+                    break;
+                DEFAULT
+                    if (message.AuthenticationInfo &&
+                        message.AuthenticationInfo->supi_or_suci &&
+                        strlen(message.AuthenticationInfo->supi_or_suci)) {
+                        ausf_ue = ausf_ue_find_by_suci_or_supi(
+                                message.AuthenticationInfo->supi_or_suci);
+                        if (!ausf_ue) {
+                            ausf_ue = ausf_ue_add(
+                                    message.AuthenticationInfo->supi_or_suci);
+                        }
+                    }
+                END
                 break;
             CASE(OGS_SBI_HTTP_METHOD_DELETE)
             CASE(OGS_SBI_HTTP_METHOD_PUT)

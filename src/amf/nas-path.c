@@ -528,7 +528,7 @@ int nas_5gs_send_authentication_reject(amf_ue_t *amf_ue)
 
     ogs_warn("[%s] Authentication reject", amf_ue->suci);
 
-    gmmbuf = gmm_build_authentication_reject();
+    gmmbuf = gmm_build_authentication_reject(amf_ue);
     if (!gmmbuf) {
         ogs_error("gmm_build_authentication_reject() failed");
         return OGS_ERROR;
@@ -541,6 +541,40 @@ int nas_5gs_send_authentication_reject(amf_ue_t *amf_ue)
 
     return rv;
 }
+
+int nas_5gs_send_authentication_result(amf_ue_t *amf_ue)
+ {
+     int rv;
+     ran_ue_t *ran_ue = NULL;
+     ogs_pkbuf_t *gmmbuf = NULL;
+ 
+     if (!amf_ue) {
+         ogs_error("UE(amf-ue) context has already been removed");
+         return OGS_NOTFOUND;
+     }
+ 
+     ran_ue = ran_ue_find_by_id(amf_ue->ran_ue_id);
+     if (!ran_ue) {
+         ogs_error("[%s] NG context has already been removed", amf_ue->supi);
+         return OGS_NOTFOUND;
+     }
+ 
+     ogs_debug("[%s] Authentication result (%s)", amf_ue->suci,
+             OpenAPI_auth_result_ToString(amf_ue->auth_result));
+ 
+     gmmbuf = gmm_build_authentication_result(amf_ue);
+     if (!gmmbuf) {
+         ogs_error("gmm_build_authentication_result() failed");
+         return OGS_ERROR;
+     }
+ 
+     amf_metrics_inst_global_inc(AMF_METR_GLOB_CTR_AMF_AUTH_RESULT);
+ 
+     rv = nas_5gs_send_to_downlink_nas_transport(ran_ue, gmmbuf);
+     ogs_expect(rv == OGS_OK);
+ 
+     return rv;
+ }
 
 int nas_5gs_send_security_mode_command(amf_ue_t *amf_ue)
 {

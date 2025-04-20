@@ -79,6 +79,7 @@ struct ausf_ue_s {
     uint8_t hxres_star[OGS_MAX_RES_LEN];
     uint8_t kausf[OGS_SHA256_DIGEST_SIZE];
     uint8_t kseaf[OGS_SHA256_DIGEST_SIZE];
+    uint8_t xres[OGS_MAX_RES_LEN]; // For EAP-AKA-PRIME
 };
 
 void ausf_context_init(void);

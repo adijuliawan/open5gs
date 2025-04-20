@@ -44,7 +44,9 @@ ogs_pkbuf_t *gmm_build_identity_request(amf_ue_t *amf_ue);
 ogs_pkbuf_t *gmm_build_security_mode_command(amf_ue_t *amf_ue);
 
 ogs_pkbuf_t *gmm_build_authentication_request(amf_ue_t *amf_ue);
-ogs_pkbuf_t *gmm_build_authentication_reject(void);
+//ogs_pkbuf_t *gmm_build_authentication_reject(void);
+ogs_pkbuf_t *gmm_build_authentication_reject(amf_ue_t *amf_ue);
+ogs_pkbuf_t *gmm_build_authentication_result(amf_ue_t *amf_ue);
 
 typedef struct gmm_configuration_update_command_param_s {
     int registration_requested;

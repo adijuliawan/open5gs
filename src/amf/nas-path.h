@@ -50,6 +50,7 @@ int nas_5gs_send_identity_request(amf_ue_t *amf_ue);
 
 int nas_5gs_send_authentication_request(amf_ue_t *amf_ue);
 int nas_5gs_send_authentication_reject(amf_ue_t *amf_ue);
+int nas_5gs_send_authentication_result(amf_ue_t *amf_ue);
 
 int nas_5gs_send_security_mode_command(amf_ue_t *amf_ue);
 

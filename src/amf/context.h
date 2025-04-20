@@ -458,12 +458,18 @@ struct amf_ue_s {
         char *resource_uri;
         ogs_sbi_client_t *client;
     } confirmation_for_5g_aka;
+
+    OpenAPI_auth_type_e auth_type;
+
     /* Random challenge value */
     uint8_t         rand[OGS_RAND_LEN];
     /* Authentication token */
     uint8_t         autn[OGS_AUTN_LEN];
     /* Expected auth response. */
     uint8_t         xres_star[OGS_MAX_RES_LEN];
+
+    char            eap_payload[OGS_MAX_EAP_PAYLOAD_LEN];
+    uint16_t        eap_payload_len;
 
     /* NAS backoff parameter value. */
     uint8_t         abba[OGS_NAS_MAX_ABBA_LEN];

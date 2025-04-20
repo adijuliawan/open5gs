@@ -33,6 +33,17 @@ void ogs_kdf_kausf(
         uint8_t *ck, uint8_t *ik,
         char *serving_network_name, uint8_t *autn,
         uint8_t *kausf);
+/* TS33.501 Annex A.3 : CK' and IK' derivation function */
+void ogs_kdf_ck_prime_ik_prime(
+        uint8_t *ck, uint8_t *ik,
+        char *serving_network_name, uint8_t *sqn, uint8_t *ak,
+        uint8_t *ck_prime, uint8_t *ik_prime);
+
+void ogs_kdf_prf_prime(
+        uint8_t *ck_prime, uint8_t *ik_prime, const char *supi,
+        uint8_t *k_encr, uint8_t *k_aut, uint8_t *k_re, uint8_t *msk, uint8_t *emsk
+);
+
 
 /* TS33.501 Annex A.4 : RES* and XRES* derivation function */
 void ogs_kdf_xres_star(

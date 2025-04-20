@@ -1735,6 +1735,8 @@ void gmm_state_authentication(ogs_fsm_t *s, amf_event_t *e)
 
     switch (e->h.id) {
     case OGS_FSM_ENTRY_SIG:
+        /* reset authentication state */
+        amf_ue->auth_result = OpenAPI_auth_result_NULL;
         break;
     case OGS_FSM_EXIT_SIG:
         break;
@@ -1919,9 +1921,23 @@ void gmm_state_authentication(ogs_fsm_t *s, amf_event_t *e)
                 }
 
                 SWITCH(sbi_message->h.method)
+                /* Previously there were only two options here: a POST message would imply
+                 * an initial UeAuthCtx creation, and a PUT would imply a 5g-aka confirmation.
+                 * However, now that we need to support also EAP-AKA', we need to check the
+                 * resource name to determine the action to take.
+                 */
                 CASE(OGS_SBI_HTTP_METHOD_POST)
-                    rv = amf_nausf_auth_handle_authenticate(
-                            amf_ue, sbi_message);
+                    // rv = amf_nausf_auth_handle_authenticate(
+                    //         amf_ue, sbi_message);
+                    SWITCH(sbi_message->h.resource.component[2])
+                    CASE(OGS_SBI_RESOURCE_NAME_EAP_SESSION)
+                        rv = amf_nausf_auth_handle_authenticate_eap_session(
+                                amf_ue, sbi_message);
+                        break;
+                    DEFAULT
+                        rv = amf_nausf_auth_handle_authenticate(
+                                amf_ue, sbi_message);
+                    END
                     if (rv != OGS_OK) {
                         ogs_error("[%s] Cannot handle SBI message",
                                 amf_ue->suci);
@@ -1930,6 +1946,23 @@ void gmm_state_authentication(ogs_fsm_t *s, amf_event_t *e)
                         ogs_assert(r != OGS_ERROR);
                         AMF_RESTORE_CONTEXT_ON_FAILURE(amf_ue, s);
                         break;
+                    } else if (amf_ue->auth_result == OpenAPI_auth_result_AUTHENTICATION_SUCCESS) {
+                        amf_ue->selected_int_algorithm =
+                            amf_selected_int_algorithm(amf_ue);
+                        amf_ue->selected_enc_algorithm =
+                            amf_selected_enc_algorithm(amf_ue);
+
+                        if (amf_ue->selected_int_algorithm ==
+                                OGS_NAS_SECURITY_ALGORITHMS_EIA0) {
+                            ogs_error("Encrypt[0x%x] can be skipped "
+                                "with NEA0, but Integrity[0x%x] cannot be "
+                                "bypassed with NIA0",
+                                amf_ue->selected_enc_algorithm,
+                                amf_ue->selected_int_algorithm);
+                            AMF_RESTORE_CONTEXT_ON_FAILURE(amf_ue, s);
+                            break;
+                        }
+                        OGS_FSM_TRAN(&amf_ue->sm, &gmm_state_security_mode);
                     }
                     break;
                 CASE(OGS_SBI_HTTP_METHOD_PUT)

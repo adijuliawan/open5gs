@@ -882,6 +882,7 @@ int gmm_handle_deregistration_request(amf_ue_t *amf_ue,
 
     xact_count = amf_sess_xact_count(amf_ue);
 
+    amf_ue->auth_result = OpenAPI_auth_result_NULL;
     state = AMF_UE_INITIATED_DE_REGISTERED;
     amf_sbi_send_release_all_sessions(ran_ue, amf_ue, state);
 
@@ -915,47 +916,87 @@ int gmm_handle_deregistration_request(amf_ue_t *amf_ue,
 int gmm_handle_authentication_response(amf_ue_t *amf_ue,
         ogs_nas_5gs_authentication_response_t *authentication_response)
 {
-    ogs_nas_authentication_response_parameter_t
-        *authentication_response_parameter = NULL;
-    uint8_t hxres_star[OGS_MAX_RES_LEN];
+    // ogs_nas_authentication_response_parameter_t
+    //     *authentication_response_parameter = NULL;
+    // uint8_t hxres_star[OGS_MAX_RES_LEN];
     int r;
 
     ogs_assert(amf_ue);
     ogs_assert(authentication_response);
 
-    authentication_response_parameter = &authentication_response->
-                authentication_response_parameter;
+    // authentication_response_parameter = &authentication_response->
+    //             authentication_response_parameter;
 
     ogs_debug("[%s] Authentication response", amf_ue->suci);
 
     CLEAR_AMF_UE_TIMER(amf_ue->t3560);
 
-    if (authentication_response_parameter->length != OGS_MAX_RES_LEN) {
-        ogs_error("[%s] Invalid length [%d]",
-                amf_ue->suci, authentication_response_parameter->length);
-        return OGS_ERROR;
-    }
+    // if (authentication_response_parameter->length != OGS_MAX_RES_LEN) {
+    //     ogs_error("[%s] Invalid length [%d]",
+    //             amf_ue->suci, authentication_response_parameter->length);
+    //     return OGS_ERROR;
+    // }
 
-    ogs_kdf_hxres_star(
-            amf_ue->rand, authentication_response_parameter->res, hxres_star);
+    /* what type of authentication are we using? */
+    if (amf_ue->auth_type == OpenAPI_auth_type_5G_AKA) {
+        ogs_nas_authentication_response_parameter_t
+            *authentication_response_parameter = &authentication_response->
+            authentication_response_parameter;
+        uint8_t hxres_star[OGS_MAX_RES_LEN];
 
-    if (memcmp(hxres_star, amf_ue->hxres_star, OGS_MAX_RES_LEN) != 0) {
-        ogs_error("[%s] MAC failure", amf_ue->suci);
-        ogs_log_hexdump(OGS_LOG_ERROR,
-                authentication_response_parameter->res,
+        ogs_assert(authentication_response_parameter);
+
+        if (authentication_response_parameter->length != OGS_MAX_RES_LEN) {
+            ogs_error("[%s] Invalid length [%d]",
+                    amf_ue->suci, authentication_response_parameter->length);
+            return OGS_ERROR;
+        }
+
+        ogs_kdf_hxres_star(
+                amf_ue->rand, authentication_response_parameter->res, hxres_star);
+
+        if (memcmp(hxres_star, amf_ue->hxres_star, OGS_MAX_RES_LEN) != 0) {
+            ogs_error("[%s] MAC failure", amf_ue->suci);
+            ogs_log_hexdump(OGS_LOG_ERROR,
+                    authentication_response_parameter->res,
+                    authentication_response_parameter->length);
+            ogs_log_hexdump(OGS_LOG_ERROR, hxres_star, OGS_MAX_RES_LEN);
+            ogs_log_hexdump(OGS_LOG_ERROR,
+                    amf_ue->hxres_star, OGS_MAX_RES_LEN);
+            return OGS_ERROR;
+        }
+
+        memcpy(amf_ue->xres_star, authentication_response_parameter->res,
                 authentication_response_parameter->length);
-        ogs_log_hexdump(OGS_LOG_ERROR, hxres_star, OGS_MAX_RES_LEN);
-        ogs_log_hexdump(OGS_LOG_ERROR,
-                amf_ue->hxres_star, OGS_MAX_RES_LEN);
+        r = amf_ue_sbi_discover_and_send(
+                OGS_SBI_SERVICE_TYPE_NAUSF_AUTH, NULL,
+                amf_nausf_auth_build_authenticate_confirmation, amf_ue, 0, NULL);
+    } else if (amf_ue->auth_type == OpenAPI_auth_type_EAP_AKA_PRIME) {
+        ogs_nas_eap_message_t *eap_message = NULL;
+
+        eap_message = &authentication_response->eap_message;
+        ogs_assert(eap_message);
+
+        if (eap_message->length > OGS_MAX_EAP_PAYLOAD_LEN) {
+            ogs_error("[%s] Invalid length [%d]",
+                    amf_ue->suci, eap_message->length);
+            return OGS_ERROR;
+        }
+        ogs_trace("    UE response EAP-Message:");
+        ogs_log_hexdump(OGS_LOG_TRACE, eap_message->buffer, eap_message->length);
+        memset(amf_ue->eap_payload, 0, OGS_MAX_EAP_PAYLOAD_LEN);
+        amf_ue->eap_payload_len = ogs_base64_encode_binary(amf_ue->eap_payload,
+                eap_message->buffer, eap_message->length);
+        ogs_trace("    UE response EAP-Message(Base64): %s", amf_ue->eap_payload);
+        r = amf_ue_sbi_discover_and_send(
+                OGS_SBI_SERVICE_TYPE_NAUSF_AUTH, NULL,
+                amf_nausf_auth_build_authenticate_eap_session, amf_ue, 0, NULL);
+    } else {
+        ogs_error("[%s] Invalid Auth Type [%d]",
+                amf_ue->suci, amf_ue->auth_type);
         return OGS_ERROR;
     }
 
-    memcpy(amf_ue->xres_star, authentication_response_parameter->res,
-            authentication_response_parameter->length);
-
-    r = amf_ue_sbi_discover_and_send(
-            OGS_SBI_SERVICE_TYPE_NAUSF_AUTH, NULL,
-            amf_nausf_auth_build_authenticate_confirmation, amf_ue, 0, NULL);
     ogs_expect(r == OGS_OK);
     ogs_assert(r != OGS_ERROR);
 

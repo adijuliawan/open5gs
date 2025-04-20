@@ -113,7 +113,10 @@ int ogs_dbi_auth_info(char *supi, ogs_dbi_auth_info_t *auth_info)
         } else if (!strcmp(key, OGS_SQN_STRING) &&
                 BSON_ITER_HOLDS_INT64(&inner_iter)) {
             auth_info->sqn = bson_iter_int64(&inner_iter);
-        }
+        } else if (!strcmp(key, OGS_AUTH_METHOD_STRING) &&
+                BSON_ITER_HOLDS_INT64(&inner_iter)) {
+            auth_info->auth_method = bson_iter_int64(&inner_iter);
+} 
     }
 
 out:
