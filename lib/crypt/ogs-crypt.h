@@ -38,6 +38,7 @@
 #include "crypt/ecc.h"
 
 #include "crypt/ogs-kdf.h"
+#include "crypt/ogs-prf.h"
 #include "crypt/ogs-base64.h"
 
 #include "crypt/openssl/snow3g.h"

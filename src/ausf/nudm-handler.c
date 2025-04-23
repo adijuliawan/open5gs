@@ -314,7 +314,7 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
 
     ausf_ue->auth_type = AuthenticationInfoResult->auth_type;
 
-    //save variable to AUSF_UE (RAND? & XRES?)
+    //save RAND and XRES to AUSF_UE
     ogs_ascii_to_hex(
         AuthenticationVector->rand,
         strlen(AuthenticationVector->rand),
@@ -329,13 +329,6 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     uint8_t rand[OGS_RAND_LEN];
     uint8_t xres[OGS_MAX_RES_LEN];
     uint8_t autn[OGS_AUTN_LEN];
-
-    uint8_t k_encr[OGS_KEY_LEN];
-    uint8_t k_aut[OGS_KEY_LEN*2];
-    uint8_t k_re[OGS_KEY_LEN*2];
-    uint8_t msk[OGS_KEY_LEN*4];
-    uint8_t emsk[OGS_KEY_LEN*4];
-
     
     ogs_debug("[EAP_AKA_PRIME] CK_PRIME [%s]",AuthenticationVector->ck_prime);
     ogs_debug("[EAP_AKA_PRIME] IK_PRIME [%s]",AuthenticationVector->ik_prime);
@@ -367,35 +360,67 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
         strlen(AuthenticationVector->autn),
         autn, sizeof(autn));
 
-    ogs_kdf_prf_prime(ik_prime, ck_prime,ausf_ue->supi,
-        k_encr,k_aut,k_re,msk,emsk);    
+   
+    /*
+    new engine for PRF PRIME 
     
-    char k_encr_string[OGS_KEYSTRLEN(OGS_KEY_LEN)];
-    char k_aut_string[OGS_KEYSTRLEN(OGS_KEY_LEN*2)];
-    char k_re_string[OGS_KEYSTRLEN(OGS_KEY_LEN*2)];
-    char msk_string[OGS_KEYSTRLEN(OGS_KEY_LEN*4)];
-    char emsk_string[OGS_KEYSTRLEN(OGS_KEY_LEN*4)];
+    For EAP-AKA', output is 1664 bits = 208 bytes 
+    For EAP-AKA'FS, there is 2 
+        MK is 384 bits = 48 bytes
+        MK_ECDHE is 1280 = 160 bytes 
+    For EAP-AKA'-HPQC
+        MK is 384 bits = 48 bytes 
+        MK_HYBRID is 1280 = 160 bytes
 
-    ogs_hex_to_ascii(k_encr, sizeof(k_encr),
-        k_encr_string, sizeof(k_encr_string));
-    ogs_hex_to_ascii(k_aut, sizeof(k_aut),
-        k_aut_string, sizeof(k_aut_string));
-    ogs_hex_to_ascii(k_re, sizeof(k_re),
-        k_re_string, sizeof(k_re_string));
-    ogs_hex_to_ascii(msk, sizeof(msk),
-        msk_string, sizeof(msk_string));
-    ogs_hex_to_ascii(emsk, sizeof(emsk),
-        emsk_string, sizeof(emsk_string));
+    Key is IK' + CK'
+    */
+
+    size_t key_len = OGS_KEY_LEN*2;
+
+    uint8_t key_prf[key_len];
+    memcpy(key_prf, ik_prime, OGS_KEY_LEN);
+    memcpy(key_prf+OGS_KEY_LEN, ck_prime, OGS_KEY_LEN);
+
+    // change prefix to use EAP-AKA'-FS
+    const char *prefix = "EAP-AKA'";
+    char *supi = ogs_id_get_value(ausf_ue->supi);
+    size_t input_len = strlen(prefix) + strlen(supi);
+
+    uint8_t input[input_len];
+    size_t pos = 0;
+    size_t i;
+
+    for (i = 0; i < strlen(prefix); i++) {
+        input[pos] = (uint8_t)prefix[i];  
+        pos++;
+    }
     
-    ogs_debug("[EAP_AKA_PRIME] K_encr : [%s]", k_encr_string);
-    ogs_debug("[EAP_AKA_PRIME] K_aut : [%s]", k_aut_string);
-    ogs_debug("[EAP_AKA_PRIME] K_re : [%s]", k_re_string);
-    ogs_debug("[EAP_AKA_PRIME] MSK : [%s]", msk_string);
-    ogs_debug("[EAP_AKA_PRIME] EMSK : [%s]", emsk_string);
+    for (i = 0; i < strlen(supi); i++) {
+        input[pos] = (uint8_t)supi[i];  
+        pos++;
+    }
+    // output master key (MK) is 1664 bits = 208 bytes
+    size_t mk_len = 208; 
+    uint8_t mk[mk_len];
 
-    //copy kausf from msk 
-    memcpy(ausf_ue->kausf,emsk,OGS_SHA256_DIGEST_SIZE);
-    memcpy(ausf_ue->k_aut,k_aut,OGS_SHA256_DIGEST_SIZE);
+    ogs_prf_prime(key_prf, key_len, input, input_len, mk, mk_len);
+
+    /* Debug PRF */
+    char input_str[OGS_KEYSTRLEN(input_len)];
+    ogs_hex_to_ascii(input, sizeof(input),
+        input_str, sizeof(input_str));
+
+    char mk_string[OGS_KEYSTRLEN(mk_len)];
+    ogs_hex_to_ascii(mk, sizeof(mk),
+        mk_string, sizeof(mk_string));
+
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Input : [%s]", input_str);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] MK : [%s]", mk_string);
+    /* End Debug PRF*/
+
+    memcpy(ausf_ue->k_aut,mk+16,OGS_SHA256_DIGEST_SIZE);
+    memcpy(ausf_ue->kausf,mk+144,OGS_SHA256_DIGEST_SIZE);
+    
 
     char kausf_string[OGS_KEYSTRLEN(OGS_SHA256_DIGEST_SIZE)];
     ogs_hex_to_ascii(ausf_ue->kausf, sizeof(ausf_ue->kausf),
@@ -446,16 +471,13 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     eap_aka_encode_packet(eap_request_packet, eap_request);
 
     //mac calculation 
-    ogs_hmac_sha256(k_aut, 32, eap_request, eap_request_length, at_mac+4, OGS_SHA256_DIGEST_SIZE);
+    ogs_hmac_sha256(ausf_ue->k_aut, OGS_SHA256_DIGEST_SIZE, eap_request, eap_request_length, at_mac+4, OGS_SHA256_DIGEST_SIZE);
 
     //copy back at_mac
     memcpy(eap_request + (eap_request_length - EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH), at_mac, EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH);
 
     char eap_request_base64[((eap_request_length + 2) / 3) * 4 + 1];
     ogs_base64_encode_binary(eap_request_base64, eap_request, eap_request_length);
-
-   
-
 
     /* Start Debug */
     char new_at_rand_string[OGS_KEYSTRLEN(EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH)];
@@ -481,8 +503,6 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     ogs_hex_to_ascii(eap_request, sizeof(eap_request),
         eap_request_string, sizeof(eap_request_string));
 
-
-
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_RAND[%s]", new_at_rand_string);
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_AUTN[%s]", new_at_autn_string);
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_KDF[%s]", new_at_kdf_string);
@@ -502,7 +522,6 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
 
     memset(&AuthData, 0, sizeof(AuthData));
     
-    //AuthData.eap_payload = ausf_ue->xres;
     AuthData.is_eap_payload = true;
     AuthData.eap_payload.eap_payload = eap_request_base64;
 

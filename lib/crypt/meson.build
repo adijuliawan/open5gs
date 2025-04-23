@@ -29,6 +29,7 @@ libcrypt_sources = files('''
     zuc.h
     kasumi.h
     ogs-kdf.h
+    ogs-prf.h
     ecc.h
 
     ogs-aes.c
@@ -43,6 +44,7 @@ libcrypt_sources = files('''
     kasumi.c
 
     ogs-kdf.c
+    ogs-prf.c
     ogs-base64.c
 
     curve25519-donna.c
