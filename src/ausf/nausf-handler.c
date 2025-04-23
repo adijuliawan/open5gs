@@ -20,6 +20,7 @@
 #include "sbi-path.h"
 #include "nnrf-handler.h"
 #include "nausf-handler.h"
+#include "eap/eap.h"
 
 bool ausf_nausf_auth_handle_authenticate(ausf_ue_t *ausf_ue,
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
@@ -69,15 +70,8 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
     ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
 {
     OpenAPI_eap_session_t *EapSession  = NULL;
-    //ogs_nas_eap_message_t *eap_message = NULL;
-
-    //char eap_payload = NULL;
-
-    //char *res_string = NULL;
-    //int8_t res[OGS_KEYSTRLEN(OGS_MAX_RES_LEN)];
 
     int r;
-    int len;
 
     ogs_assert(ausf_ue);
     ogs_assert(stream);
@@ -86,78 +80,42 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
     EapSession = recvmsg->EapSession;
 
 
-    ogs_debug("[EAP_AKA_PRIME] eap_payload [%s]",EapSession->eap_payload);
-
-    uint8_t eap_payload[OGS_MAX_EAP_PAYLOAD_LEN];
-
-    len = ogs_base64_decode_binary(eap_payload,EapSession->eap_payload);
+    uint8_t eap_response_decoded[OGS_MAX_EAP_PAYLOAD_LEN];
     
-    if (len == 0)
+    size_t eap_reponse_len = ogs_base64_decode_binary(eap_response_decoded,EapSession->eap_payload);
+
+    uint8_t eap_response_mac_input[eap_reponse_len];
+    
+    if (eap_reponse_len == 0)
         ogs_error("[EAP_AKA_PRIME] eap_payload not decoded ");
 
-    ogs_debug("[EAP_AKA_PRIME] eap_payload len decoded %d",len);
-    //ogs_debug("[EAP_AKA_PRIME] eap_payload [%s]",eap_payload); 
+    uint8_t at_res[8];
+    uint8_t at_mac[16];
+    uint8_t xmac[OGS_SHA256_DIGEST_SIZE];
 
-    char eap_payload_string[len*2+1];
-    ogs_hex_to_ascii(eap_payload, sizeof(eap_payload),
-            eap_payload_string, sizeof(eap_payload_string));
-    ogs_debug("[EAP_AKA_PRIME] eap_payload [%s]",eap_payload_string); 
+    //create new copy of eap_request, clean at_mac for integrity check (at_mac)
+    eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_RES, eap_response_decoded, eap_reponse_len, at_res);
+    eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_MAC, eap_response_decoded, eap_reponse_len, at_mac);
+    eap_aka_clean_mac(EAP_AKA_ATTRIBUTE_AT_MAC, eap_response_decoded, eap_reponse_len, eap_response_mac_input);    
 
-    size_t pos = 0;
+    //mac calculation 
+    ogs_hmac_sha256(ausf_ue->k_aut, 32, eap_response_mac_input, eap_reponse_len, xmac, OGS_SHA256_DIGEST_SIZE);
 
-    ogs_debug("[EAP_AKA_PRIME] Response [%02x]",eap_payload[pos++]);
-    ogs_debug("[EAP_AKA_PRIME] Identifier [%02x]",eap_payload[pos++]);
-    pos = pos + 2;
-    ogs_debug("[EAP_AKA_PRIME] EAP_AKA_PRIME IDENTIFIER [%02x]",eap_payload[pos++]);
-    ogs_debug("[EAP_AKA_PRIME] AKA-CHALLENGE [%02x]",eap_payload[pos++]);
-    pos = pos + 2; //reserve bit 
-    ogs_debug("[EAP_AKA_PRIME] AT_RES(3) [%02x]",eap_payload[pos++]);
-    ogs_debug("[EAP_AKA_PRIME] AT_RES length [%02x]",eap_payload[pos++]);
+    //ogs_log_hexdump(OGS_LOG_DEBUG, xmac, OGS_SHA256_DIGEST_SIZE);
 
-    uint16_t at_res_length =  (eap_payload[pos] << 8 ) | eap_payload[pos+1];
-    ogs_debug("[EAP_AKA_PRIME] AT_RES length data [%u]",at_res_length);
-    pos = pos + 2;
+    if (memcmp(xmac, at_mac, OGS_SHA256_DIGEST_SIZE/2) != 0) {
+        ogs_log_hexdump(OGS_LOG_WARN, xmac, OGS_SHA256_DIGEST_SIZE);
+        ogs_log_hexdump(OGS_LOG_WARN, at_mac, OGS_SHA256_DIGEST_SIZE/2);
+        ogs_error("MAC Failure!");
 
-    uint8_t res[8] ;
-    char res_string[8*2+1];
-    
-    memcpy(res, &eap_payload[pos],8);
-
-    ogs_hex_to_ascii(res, sizeof(res),
-        res_string, sizeof(res_string));
-
-    ogs_debug("[EAP_AKA_PRIME] AT_RES data [%s]",res_string);
-    pos = pos + 8;
-
-    ogs_debug("[EAP_AKA_PRIME] AT_MAC(11) [%02x]",eap_payload[pos++]);
-    ogs_debug("[EAP_AKA_PRIME] AT_MAC length (5) [%02x]",eap_payload[pos++]);
-    pos = pos + 2 ; //reserve bytes
-    
-    uint8_t mac[16];
-    char mac_string[16*2+1];
-
-    memcpy(mac, &eap_payload[pos],16);
-    ogs_hex_to_ascii(mac, sizeof(mac),
-        mac_string, sizeof(mac_string));
-
-    ogs_debug("[EAP_AKA_PRIME] AT_MAC data [%s]",mac_string);
-    pos = pos + 16;
-
-    ogs_debug("[EAP_AKA_PRIME] AT_KDF (24) [%02x]",eap_payload[pos++]);
-    ogs_debug("[EAP_AKA_PRIME] AT_KDF length (5) [%02x]",eap_payload[pos++]);
-    uint16_t at_kdf_value =  (eap_payload[pos] << 8 ) | eap_payload[pos+1];
-    ogs_debug("[EAP_AKA_PRIME] AT_KDF Value [%u]",at_kdf_value);
-
-
-    if (memcmp(res, ausf_ue->xres, OGS_MAX_RES_LEN/2) != 0) {
-        ogs_log_hexdump(OGS_LOG_WARN, res, OGS_MAX_RES_LEN);
+        ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
+    } else if (memcmp(at_res, ausf_ue->xres, OGS_MAX_RES_LEN/2) != 0) {
+        ogs_log_hexdump(OGS_LOG_WARN, at_res, OGS_MAX_RES_LEN);
         ogs_log_hexdump(OGS_LOG_WARN, ausf_ue->xres, OGS_MAX_RES_LEN);
 
         ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
     } else {
-        ogs_debug("[EAP_AKA_PRIME] RES MATCH!");
         ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_SUCCESS;
-
     }
 
     r = ausf_sbi_discover_and_send(

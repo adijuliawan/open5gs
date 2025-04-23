@@ -18,6 +18,7 @@
  */
 
 #include "nudm-handler.h"
+#include "eap/eap.h"
 
 static const char *links_member_name(OpenAPI_auth_type_e auth_type)
 {
@@ -202,96 +203,6 @@ static bool ausf_nudm_ueau_handle_get_5g_aka(ausf_ue_t *ausf_ue,
     return true;
 }
 
-void write_be16(uint8_t *dst, uint16_t val) {
-    dst[0] = (val >> 8) & 0xFF;
-    dst[1] = val & 0xFF;
-}
-
-int encode_at_rand(uint8_t *buf, const uint8_t *rand) {
-    buf[0] = 1; //AT_RAND_ATTRIBUTE              1
-    buf[1] = 5;
-    buf[2] = buf[3] = 0x00;
-    memcpy(buf + 4, rand, 16);
-    return 20;
-}
-
-int encode_at_autn(uint8_t *buf, const uint8_t *autn) {
-    buf[0] = 2; //AT_AUTN_ATTRIBUTE              2
-    buf[1] = 5;
-    buf[2] = buf[3] = 0x00;
-    memcpy(buf + 4, autn, 16);
-    return 20;
-}
-
-int encode_at_kdf(uint8_t *buf) {
-    buf[0] = 24; // AT_KDF_ATTRIBUTE               24
-    buf[1] = 1;
-    buf[2] = 0x00;
-    buf[3] = 0x01;
-    return 4;
-}
-
-void int_to_bytes_be(uint16_t value, uint8_t *out) {
-    out[0] = (value >> 8) & 0xFF;
-    out[1] = value & 0xFF;
-}
-
-void pad_zeros(const uint8_t *input, size_t input_len, uint8_t *output, size_t padded_len) {
-    memset(output, 0, padded_len);
-    if (input_len > padded_len) input_len = padded_len;
-    memcpy(output + (padded_len - input_len), input, input_len);
-}
-
-
-int encode_at_kdf_input(uint8_t *buf, const uint8_t *data, size_t len) {
-    int length = (len + 3) / 4 + 1;
-    buf[0] = 23; // AT_KDF_INPUT_ATTRIBUTE      23
-    buf[1] = (uint8_t)length;
-    int_to_bytes_be((uint16_t)len, buf + 2);
-    pad_zeros(data, len, buf + 4, (length - 1) * 4);
-    return length * 4; //36
-}
-
-int encode_at_res(uint8_t *buf, const uint8_t *data, size_t len) {
-    int length = (len + 3) / 4 + 1;
-    buf[0] = 3; // AT_RES_ATTRIBUTE               3
-    buf[1] = (uint8_t)length;
-    buf[2] = (len >> 8) & 0xFF;
-    buf[3] = len & 0xFF;
-    memset(buf + 4, 0, (length - 1) * 4);
-    memcpy(buf + 4, data, len);
-    return length * 4;
-}
-
-int encode_at_mac(uint8_t *buf) {
-    buf[0] = 11; // AT_MAC_ATTRIBUTE               11
-    buf[1] = 5;
-    buf[2] = buf[3] = 0x00;
-    memset(buf + 4, 0x00, 16);
-    return 20;
-}
-
-void calculate_at_mac(const uint8_t *key, const uint8_t *data, size_t len, uint8_t *mac_out) {
-    ogs_hmac_sha256(key, 32, data, len, mac_out, OGS_SHA256_DIGEST_SIZE);
-}
-
-char *base64_encode(const uint8_t *data, size_t len) {
-    BIO *bio, *b64;
-    BUF_MEM *buffer_ptr;
-    b64 = BIO_new(BIO_f_base64());
-    bio = BIO_new(BIO_s_mem());
-    BIO_set_flags(b64, BIO_FLAGS_BASE64_NO_NL);
-    bio = BIO_push(b64, bio);
-    BIO_write(bio, data, len);
-    BIO_flush(bio);
-    BIO_get_mem_ptr(bio, &buffer_ptr);
-    char *b64text = malloc(buffer_ptr->length + 1);
-    memcpy(b64text, buffer_ptr->data, buffer_ptr->length);
-    b64text[buffer_ptr->length] = '\0';
-    BIO_free_all(bio);
-    return b64text;
-}
-
 static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
 {   
@@ -413,42 +324,11 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
         strlen(AuthenticationVector->xres),
         ausf_ue->xres, sizeof(ausf_ue->xres));
     
-    //derive K_AUT, K_AUSF from PRF(ikPrime,ckPrime,identity)
-    // / uint8_t *ck_prime, uint8_t *ik_prime, const char *supi,
-    //uint8_t *k_encr, uint8_t *k_aut, uint8_t *k_re, uint8_t *msk, uint8_t *emsk 
-
-    //get RAND, XRES, AUTN 
-   
-
-    // char rand_string[OGS_KEYSTRLEN(OGS_RAND_LEN)];
-    // char xres_string[OGS_KEYSTRLEN(OGS_MAX_RES_LEN)];
-    // char autn_string[OGS_KEYSTRLEN(OGS_AUTN_LEN)];
-
-    // ogs_ascii_to_hex(
-    //     AuthenticationVector->rand,
-    //     strlen(AuthenticationVector->rand),
-    //     rand_string, sizeof(rand_string));
-
-    // ogs_ascii_to_hex(
-    //     AuthenticationVector->xres,
-    //     strlen(AuthenticationVector->xres),
-    //     xres_string, sizeof(xres_string));
-
-    // ogs_ascii_to_hex(
-    //     AuthenticationVector->autn,
-    //     strlen(AuthenticationVector->autn),
-    //     autn_string, sizeof(autn_string));
-    
-    
     uint8_t ck_prime[OGS_KEY_LEN];
     uint8_t ik_prime[OGS_KEY_LEN];
     uint8_t rand[OGS_RAND_LEN];
     uint8_t xres[OGS_MAX_RES_LEN];
     uint8_t autn[OGS_AUTN_LEN];
-
-    
-    
-
 
     uint8_t k_encr[OGS_KEY_LEN];
     uint8_t k_aut[OGS_KEY_LEN*2];
@@ -490,9 +370,6 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     ogs_kdf_prf_prime(ik_prime, ck_prime,ausf_ue->supi,
         k_encr,k_aut,k_re,msk,emsk);    
     
-    //ogs_hex_to_ascii(udm_ue->rand, sizeof(udm_ue->rand),
-    //    rand_string, sizeof(rand_string));
-    
     char k_encr_string[OGS_KEYSTRLEN(OGS_KEY_LEN)];
     char k_aut_string[OGS_KEYSTRLEN(OGS_KEY_LEN*2)];
     char k_re_string[OGS_KEYSTRLEN(OGS_KEY_LEN*2)];
@@ -518,6 +395,7 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
 
     //copy kausf from msk 
     memcpy(ausf_ue->kausf,emsk,OGS_SHA256_DIGEST_SIZE);
+    memcpy(ausf_ue->k_aut,k_aut,OGS_SHA256_DIGEST_SIZE);
 
     char kausf_string[OGS_KEYSTRLEN(OGS_SHA256_DIGEST_SIZE)];
     ogs_hex_to_ascii(ausf_ue->kausf, sizeof(ausf_ue->kausf),
@@ -525,53 +403,98 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     ogs_debug("[EAP_AKA_PRIME] K_AUSF : [%s]", kausf_string);
 
     ogs_debug("[EAP_AKA_PRIME] Serving Network : [%s]", ausf_ue->serving_network_name);
-    // generate eap packet / eap_payload 
-    uint8_t eap_header[5] = {
-        1,
-        32,
-        0x00, 0x00,
-        50
-    };
 
-    uint8_t payload[512];
+    /* Generate EAP Request Payload
+     * rand, autn, kdf, kdf_input, mac
+     */
+
+    uint8_t data_attribute[OGS_MAX_EAP_PAYLOAD_LEN];
+    uint8_t at_rand[EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH]; // 20
+    uint8_t at_autn[EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH]; // 20
+    uint8_t at_kdf[EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH]; // 4
+    uint8_t at_mac[EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH]; // 20
+    size_t at_kdf_input_length = ((strlen(ausf_ue->serving_network_name) + 3)/4 + 1)*4; //36
+    uint8_t at_kdf_input[at_kdf_input_length]; 
+
+    // encode attribute
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_RAND, rand, OGS_RAND_LEN, at_rand);
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_AUTN, autn, OGS_AUTN_LEN, at_autn);
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF, NULL, 0, at_kdf);
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF_INPUT, ausf_ue->serving_network_name, strlen(ausf_ue->serving_network_name), at_kdf_input);
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_MAC, NULL, OGS_RAND_LEN, at_mac);
+
+    // append all attribute 
     size_t offset = 0;
-
-    payload[offset++] = 1; // AKA_CHALLENGE_SUBTYPE               1
-    payload[offset++] = 0x00;
-    payload[offset++] = 0x00;
-
-    offset += encode_at_rand(payload + offset, rand);
-    offset += encode_at_autn(payload + offset, autn);
-    offset += encode_at_kdf(payload + offset);
-    offset += encode_at_kdf_input(payload + offset, (const uint8_t *)ausf_ue->serving_network_name, strlen(ausf_ue->serving_network_name));
-    //offset += encode_at_res(payload + offset, res, res_len);
-    size_t mac_pos = offset;
-    offset += encode_at_mac(payload + offset);
-
-    uint16_t total_len = offset + 5;
-    write_be16(&eap_header[2], total_len);
-
-    uint8_t *encoded = malloc(total_len);
-    memcpy(encoded, eap_header, 5);
-    memcpy(encoded + 5, payload, offset);
-
-    uint8_t mac[OGS_SHA256_DIGEST_SIZE];
-
-    char at_mac_string[OGS_KEYSTRLEN(OGS_SHA256_DIGEST_SIZE)];
+    memcpy(data_attribute + offset, at_rand, EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH);
+    offset+=EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH;
+    memcpy(data_attribute + offset, at_autn, EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH);
+    offset+=EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH;
+    memcpy(data_attribute + offset, at_kdf, EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH);
+    offset+=EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH;
+    memcpy(data_attribute + offset, at_kdf_input, at_kdf_input_length);
+    offset+=at_kdf_input_length;
+    memcpy(data_attribute + offset, at_mac, EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH);
+    offset+=EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH;
     
+    // create eap_request 
+    size_t eap_request_length = sizeof(eap_aka_packet_t) + offset;
+    eap_aka_packet_t *eap_request_packet = malloc(eap_request_length);
 
-    calculate_at_mac(k_aut, encoded, total_len, mac);
-    memcpy(encoded + 5 + mac_pos + 4, mac, 16);
+    uint8_t eap_request[eap_request_length];
+    
+    eap_aka_build_request(eap_request_packet, EAP_AKA_SUBTYPE_AKA_CHALLENGE, offset, data_attribute);
+    eap_aka_encode_packet(eap_request_packet, eap_request);
 
-    ogs_hex_to_ascii(mac, sizeof(mac),
-        at_mac_string, sizeof(at_mac_string));
+    //mac calculation 
+    ogs_hmac_sha256(k_aut, 32, eap_request, eap_request_length, at_mac+4, OGS_SHA256_DIGEST_SIZE);
 
-    ogs_debug("[EAP_AKA_PRIME] AT_MAC : [%s]", at_mac_string);
+    //copy back at_mac
+    memcpy(eap_request + (eap_request_length - EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH), at_mac, EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH);
 
-    char *b64eap = base64_encode(encoded, total_len);
+    char eap_request_base64[((eap_request_length + 2) / 3) * 4 + 1];
+    ogs_base64_encode_binary(eap_request_base64, eap_request, eap_request_length);
 
-    ogs_debug("[EAP_AKA_PRIME] EAP Payload : [%s]", b64eap);
-    //
+   
+
+
+    /* Start Debug */
+    char new_at_rand_string[OGS_KEYSTRLEN(EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH)];
+    char new_at_autn_string[OGS_KEYSTRLEN(EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH)];
+    char new_at_kdf_string[OGS_KEYSTRLEN(EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH)];
+    char new_at_kdf_input_string[OGS_KEYSTRLEN(at_kdf_input_length)];
+    char new_at_mac_string[OGS_KEYSTRLEN(EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH)];
+    char data_attribute_string[OGS_KEYSTRLEN(offset)];
+    char eap_request_string[OGS_KEYSTRLEN(eap_request_length)];
+
+    ogs_hex_to_ascii(at_rand, sizeof(at_rand),
+        new_at_rand_string, sizeof(new_at_rand_string));
+    ogs_hex_to_ascii(at_autn, sizeof(at_autn),
+        new_at_autn_string, sizeof(new_at_autn_string));
+    ogs_hex_to_ascii(at_kdf, sizeof(at_kdf),
+        new_at_kdf_string, sizeof(new_at_kdf_string));
+    ogs_hex_to_ascii(at_kdf_input, sizeof(at_kdf_input),
+        new_at_kdf_input_string, sizeof(new_at_kdf_input_string));
+    ogs_hex_to_ascii(at_mac, sizeof(at_mac),
+        new_at_mac_string, sizeof(new_at_mac_string));
+    ogs_hex_to_ascii(data_attribute, sizeof(data_attribute),
+        data_attribute_string, sizeof(data_attribute_string));
+    ogs_hex_to_ascii(eap_request, sizeof(eap_request),
+        eap_request_string, sizeof(eap_request_string));
+
+
+
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_RAND[%s]", new_at_rand_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_AUTN[%s]", new_at_autn_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_KDF[%s]", new_at_kdf_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_KDF_INPUT[%s]", new_at_kdf_input_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] at_kdf_input_length[%ld]", at_kdf_input_length);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] AT_MAC[%s]", new_at_mac_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] ATTRIBUTE[%s]", data_attribute_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] offset[%ld]", offset);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] EAP Request[%s]", eap_request_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] EAP Request(Base64)[%s]", eap_request_base64);
+    /* End of Debug*/
+
 
     memset(&UeAuthenticationCtx, 0, sizeof(UeAuthenticationCtx));
 
@@ -581,17 +504,7 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     
     //AuthData.eap_payload = ausf_ue->xres;
     AuthData.is_eap_payload = true;
-    AuthData.eap_payload.eap_payload = b64eap;
-
-
-    //AuthData.av_5g_aka.rand = AuthenticationVector->rand;
-    //AuthData.av_5g_aka.autn = AuthenticationVector->autn;
-
-    // ogs_kdf_hxres_star(ausf_ue->rand, ausf_ue->xres_star,
-    //         ausf_ue->hxres_star);
-    // ogs_hex_to_ascii(ausf_ue->hxres_star, sizeof(ausf_ue->hxres_star),
-    //         hxres_star_string, sizeof(hxres_star_string));
-    // AuthData.av_5g_aka.hxres_star = hxres_star_string;
+    AuthData.eap_payload.eap_payload = eap_request_base64;
 
     UeAuthenticationCtx._5g_auth_data = &AuthData;
 
@@ -638,8 +551,6 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
 
     ogs_free(LinksValueSchemeValue.href);
     ogs_free(sendmsg.http.location);
-
-    
 
     return true;
 
@@ -826,22 +737,20 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
                 kseaf_string, sizeof(kseaf_string));
         EapSession.k_seaf = kseaf_string;
 
-        //make eap success packet 
-
-        uint8_t eap_success[4];
-    
-        uint8_t identifier = 0x05; // Example identifier
-
-        eap_success[0] = 0x03;             // Code: EAP-Success
-        eap_success[1] = identifier;       // Identifier
-        eap_success[2] = 0x00;             // Length high byte
-        eap_success[3] = 0x04;
         
-        char *b64eap_success = base64_encode(eap_success, sizeof(eap_success));
-        ogs_debug("[EAP_AKA_PRIME] EAP Payload [%s]",b64eap_success);
-        EapSession.eap_payload = b64eap_success;
+        // create eap_sucess_packet
+        size_t eap_success_packet_length = 4;
+        uint8_t eap_success[eap_success_packet_length];
+        char eap_response_base64[((eap_success_packet_length + 2) / 3) * 4 + 1];
+        eap_aka_packet_t *eap_response_packet = malloc(eap_success_packet_length);
 
+        eap_aka_build_success(eap_response_packet);
+        eap_aka_encode_packet(eap_response_packet,eap_success);
+        ogs_base64_encode_binary(eap_response_base64, eap_success, eap_success_packet_length);
 
+        ogs_debug("[EAP_AKA_PRIME] EAP Payload [%s]",eap_response_base64);
+
+        EapSession.eap_payload = eap_response_base64;
 
         memset(&sendmsg, 0, sizeof(sendmsg));
     

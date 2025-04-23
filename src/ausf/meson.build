@@ -52,6 +52,6 @@ executable('open5gs-ausfd',
     sources : ausf_sources,
     c_args : '-DDEFAULT_CONFIG_FILENAME="@0@/ausf.yaml"'.format(open5gs_sysconfdir),
     include_directories : srcinc,
-    dependencies : libausf_dep,
+    dependencies : [libausf_dep, libeap_dep],
     install_rpath : libdir,
     install : true)
