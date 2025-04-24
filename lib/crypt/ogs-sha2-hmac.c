@@ -152,13 +152,13 @@ void ogs_hmac_sha256_init(ogs_hmac_sha256_ctx *ctx, const uint8_t *key,
     uint32_t fill;
     uint32_t num;
 
-    uint8_t key_temp[OGS_SHA256_DIGEST_SIZE];
+    uint8_t key_temp[OGS_SHA256_BLOCK_SIZE];
     int i;
 
-    if (key_size == OGS_SHA256_BLOCK_SIZE) {
-        memcpy(key_temp, key, sizeof(key_temp));
-        num = OGS_SHA256_BLOCK_SIZE;
-    } else {
+    //if (key_size == OGS_SHA256_BLOCK_SIZE) {
+    //    memcpy(key_temp, key, sizeof(key_temp));
+    //    num = OGS_SHA256_BLOCK_SIZE;
+    //} else {
         if (key_size > OGS_SHA256_BLOCK_SIZE){
             num = OGS_SHA256_DIGEST_SIZE;
             ogs_sha256(key, key_size, key_temp);
@@ -170,7 +170,7 @@ void ogs_hmac_sha256_init(ogs_hmac_sha256_ctx *ctx, const uint8_t *key,
 
         memset(ctx->block_ipad + num, 0x36, fill);
         memset(ctx->block_opad + num, 0x5c, fill);
-    }
+    //}
 
     for (i = 0; i < num; i++) {
         ctx->block_ipad[i] = key_temp[i] ^ 0x36;

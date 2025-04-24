@@ -360,7 +360,9 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
         strlen(AuthenticationVector->autn),
         autn, sizeof(autn));
 
-   
+    // copy ik prime and ck prime to ausf context 
+    memcpy(ausf_ue->ik_prime,ik_prime,OGS_KEY_LEN);
+    memcpy(ausf_ue->ck_prime,ck_prime,OGS_KEY_LEN);
     /*
     new engine for PRF PRIME 
     
@@ -413,21 +415,60 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     char mk_string[OGS_KEYSTRLEN(mk_len)];
     ogs_hex_to_ascii(mk, sizeof(mk),
         mk_string, sizeof(mk_string));
+    
+    char key_prf_string[OGS_KEYSTRLEN(key_len)];
+    ogs_hex_to_ascii(key_prf, sizeof(key_prf),
+        key_prf_string, sizeof(key_prf_string));
 
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Input : [%s]", input_str);
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] MK : [%s]", mk_string);
     /* End Debug PRF*/
 
     memcpy(ausf_ue->k_aut,mk+16,OGS_SHA256_DIGEST_SIZE);
+
+    // need to calculate k_ausf after eap-resp success, because in FS extension, this key
+    // derived from MK_ECDHE, and for HPQC it derived from MK_PQ_SHARED
     memcpy(ausf_ue->kausf,mk+144,OGS_SHA256_DIGEST_SIZE);
     
-
-    char kausf_string[OGS_KEYSTRLEN(OGS_SHA256_DIGEST_SIZE)];
-    ogs_hex_to_ascii(ausf_ue->kausf, sizeof(ausf_ue->kausf),
-        kausf_string, sizeof(kausf_string));
-    ogs_debug("[EAP_AKA_PRIME] K_AUSF : [%s]", kausf_string);
-
     ogs_debug("[EAP_AKA_PRIME] Serving Network : [%s]", ausf_ue->serving_network_name);
+
+    // FS Extension 
+    // Generate ECDHE public key pair
+    // generate private key
+    uint8_t priv_key_ecdhe[32];
+    
+    priv_key_ecdhe[0] &= 248;
+    priv_key_ecdhe[31] &= 127;
+    priv_key_ecdhe[31] |= 64;
+
+    static const uint8_t curve25519_basepoint[32] = {9};
+    
+    uint8_t pub_key_ecdhe[32];
+
+    curve25519_donna(pub_key_ecdhe, priv_key_ecdhe, curve25519_basepoint);
+
+    memcpy(ausf_ue->hnPrivateKey,priv_key_ecdhe,32);
+
+    /* Debug ECDHE*/
+    char priv_key_ecdhe_string[OGS_KEYSTRLEN(32)];
+    char curve25519_basepoint_string[OGS_KEYSTRLEN(32)];
+    char pub_key_ecdhe_string[OGS_KEYSTRLEN(32)];
+
+    ogs_hex_to_ascii(priv_key_ecdhe, sizeof(priv_key_ecdhe),
+        priv_key_ecdhe_string, sizeof(priv_key_ecdhe_string));
+    ogs_hex_to_ascii(curve25519_basepoint, sizeof(curve25519_basepoint),
+        curve25519_basepoint_string, sizeof(curve25519_basepoint_string));
+    ogs_hex_to_ascii(pub_key_ecdhe, sizeof(pub_key_ecdhe),
+        pub_key_ecdhe_string, sizeof(pub_key_ecdhe_string));    
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Private Key ECDHE : [%s]", priv_key_ecdhe_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Curve25519 basepoint : [%s]", curve25519_basepoint_string);
+    ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Public Key ECDHE : [%s]", pub_key_ecdhe_string);
+    /* End debug ECDHE*/
+
+
+    //uint8_t at_pub_ecdhe[EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH];
+
+
 
     /* Generate EAP Request Payload
      * rand, autn, kdf, kdf_input, mac
@@ -440,6 +481,10 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     uint8_t at_mac[EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH]; // 20
     size_t at_kdf_input_length = ((strlen(ausf_ue->serving_network_name) + 3)/4 + 1)*4; //36
     uint8_t at_kdf_input[at_kdf_input_length]; 
+    //optional
+    uint8_t at_pub_ecdhe[EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH];
+    uint8_t at_kdf_fs[EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH]; // 4
+    
 
     // encode attribute
     eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_RAND, rand, OGS_RAND_LEN, at_rand);
@@ -447,6 +492,9 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF, NULL, 0, at_kdf);
     eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF_INPUT, ausf_ue->serving_network_name, strlen(ausf_ue->serving_network_name), at_kdf_input);
     eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_MAC, NULL, OGS_RAND_LEN, at_mac);
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE, pub_key_ecdhe, 32, at_pub_ecdhe);
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF_FS, NULL, 0, at_kdf_fs);
+
 
     // append all attribute 
     size_t offset = 0;
@@ -456,8 +504,12 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     offset+=EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH;
     memcpy(data_attribute + offset, at_kdf, EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH);
     offset+=EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH;
+    memcpy(data_attribute + offset, at_kdf_fs, EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH);
+    offset+=EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH;
     memcpy(data_attribute + offset, at_kdf_input, at_kdf_input_length);
     offset+=at_kdf_input_length;
+    memcpy(data_attribute + offset, at_pub_ecdhe, EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH);
+    offset+=EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH;
     memcpy(data_attribute + offset, at_mac, EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH);
     offset+=EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH;
     
@@ -750,6 +802,92 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         EapSession.auth_result = ausf_ue->auth_result;
         EapSession.supi = ausf_ue->supi; 
 
+
+        // calculate mk_ecdhe
+        // if FS extension is used, it need to compute MK_ECDHE. this information received at ausf-handler
+
+
+        // calculate secret key 
+        uint8_t shared_key[32];
+        curve25519_donna(shared_key, ausf_ue->hnPrivateKey, ausf_ue->uePublicKey);
+        
+        /*
+        
+        size_t key_len = OGS_KEY_LEN*2;
+
+        uint8_t key_prf[key_len];
+        memcpy(key_prf, ik_prime, OGS_KEY_LEN);
+        memcpy(key_prf+OGS_KEY_LEN, ck_prime, OGS_KEY_LEN);
+        */
+        size_t key_len = 64;
+
+        uint8_t key_prf[key_len];
+        memcpy(key_prf, ausf_ue->ik_prime, 16);
+        memcpy(key_prf+16, ausf_ue->ck_prime, 16);
+        memcpy(key_prf+32, shared_key, 32);
+
+        // change prefix to use EAP-AKA'-FS
+        const char *prefix = "EAP-AKA' FS";
+        char *supi = ogs_id_get_value(ausf_ue->supi);
+        size_t input_len = strlen(prefix) + strlen(supi);
+
+        uint8_t input[input_len];
+        size_t pos = 0;
+        size_t i;
+
+        for (i = 0; i < strlen(prefix); i++) {
+            input[pos] = (uint8_t)prefix[i];  
+            pos++;
+        }
+        
+        for (i = 0; i < strlen(supi); i++) {
+            input[pos] = (uint8_t)supi[i];  
+            pos++;
+        }
+        // output master key (MK) ECDHE is 1280 bits = 160 bytes
+        size_t mk_ecdhe_len = 160; 
+        uint8_t mk_ecdhe[mk_ecdhe_len];
+
+        ogs_prf_prime(key_prf, key_len, input, input_len, mk_ecdhe, mk_ecdhe_len);
+
+        memcpy(ausf_ue->kausf,mk_ecdhe+96,32);
+
+        /* Debug ECDHE*/
+        char ue_public_key_string[OGS_KEYSTRLEN(32)];
+        char hn_private_key_string[OGS_KEYSTRLEN(32)];
+        char shared_key_string[OGS_KEYSTRLEN(32)];
+        char prf_key_string[OGS_KEYSTRLEN(64)];
+        char input_prf_string[OGS_KEYSTRLEN(input_len)];
+
+        char mk_ecdhe_string[OGS_KEYSTRLEN(160)];
+        char kausf_string[OGS_KEYSTRLEN(32)];
+
+        ogs_hex_to_ascii(ausf_ue->uePublicKey, sizeof(ausf_ue->uePublicKey),
+            ue_public_key_string, sizeof(ue_public_key_string));
+        ogs_hex_to_ascii(ausf_ue->hnPrivateKey, sizeof(ausf_ue->hnPrivateKey),
+            hn_private_key_string, sizeof(hn_private_key_string));
+        ogs_hex_to_ascii(shared_key, sizeof(shared_key),
+            shared_key_string, sizeof(shared_key_string));
+        ogs_hex_to_ascii(key_prf, sizeof(key_prf),
+            prf_key_string, sizeof(prf_key_string));
+
+        ogs_hex_to_ascii(input, sizeof(input),
+            input_prf_string, sizeof(input_prf_string));
+        ogs_hex_to_ascii(mk_ecdhe, sizeof(mk_ecdhe),
+            mk_ecdhe_string, sizeof(mk_ecdhe_string));
+        ogs_hex_to_ascii(ausf_ue->kausf, sizeof(ausf_ue->kausf),
+            kausf_string, sizeof(kausf_string));
+            
+        ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Public Key UE : [%s]", ue_public_key_string);
+        ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Private Key HN : [%s]", hn_private_key_string);
+        ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Shared Secret Key ECDHE : [%s]", shared_key_string);
+        ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Input PRF : [%s]", input_prf_string);
+        ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Key PRF : [%s]", prf_key_string);
+        ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] MK ECDHE : [%s]", mk_ecdhe_string);
+        ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] K_AUSF : [%s]", kausf_string);
+        /* End debug ECDHE*/
+
+
         ogs_kdf_kseaf(ausf_ue->serving_network_name,
             ausf_ue->kausf, ausf_ue->kseaf);
         ogs_hex_to_ascii(ausf_ue->kseaf, sizeof(ausf_ue->kseaf),
@@ -760,14 +898,12 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         // create eap_sucess_packet
         size_t eap_success_packet_length = 4;
         uint8_t eap_success[eap_success_packet_length];
-        char eap_response_base64[((eap_success_packet_length + 2) / 3) * 4 + 1];
+        char *eap_response_base64 = malloc(((eap_success_packet_length + 2) / 3) * 4 + 1);
         eap_aka_packet_t *eap_response_packet = malloc(eap_success_packet_length);
 
         eap_aka_build_success(eap_response_packet);
         eap_aka_encode_packet(eap_response_packet,eap_success);
         ogs_base64_encode_binary(eap_response_base64, eap_success, eap_success_packet_length);
-
-        ogs_debug("[EAP_AKA_PRIME] EAP Payload [%s]",eap_response_base64);
 
         EapSession.eap_payload = eap_response_base64;
 

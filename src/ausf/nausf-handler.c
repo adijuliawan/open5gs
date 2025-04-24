@@ -91,15 +91,22 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
 
     uint8_t at_res[8];
     uint8_t at_mac[16];
+    uint8_t at_pub_ecdhe[32];
+
     uint8_t xmac[OGS_SHA256_DIGEST_SIZE];
 
     //create new copy of eap_request, clean at_mac for integrity check (at_mac)
     eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_RES, eap_response_decoded, eap_reponse_len, at_res);
     eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_MAC, eap_response_decoded, eap_reponse_len, at_mac);
+    eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE, eap_response_decoded, eap_reponse_len, at_pub_ecdhe);
+
     eap_aka_clean_mac(EAP_AKA_ATTRIBUTE_AT_MAC, eap_response_decoded, eap_reponse_len, eap_response_mac_input);    
 
     //mac calculation 
     ogs_hmac_sha256(ausf_ue->k_aut, 32, eap_response_mac_input, eap_reponse_len, xmac, OGS_SHA256_DIGEST_SIZE);
+
+    // if FS extension is used, it need to decode AT_PUB_ECDHE, and derived k_ausf from MK_ECDHE 
+
 
     //ogs_log_hexdump(OGS_LOG_DEBUG, xmac, OGS_SHA256_DIGEST_SIZE);
 
@@ -116,6 +123,10 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
         ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
     } else {
         ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_SUCCESS;
+        // if FS extension is used, it need to decode AT_PUB_ECDHE, and derived k_ausf from MK_ECDHE 
+        memcpy(ausf_ue->uePublicKey,at_pub_ecdhe,32);
+
+
     }
 
     r = ausf_sbi_discover_and_send(

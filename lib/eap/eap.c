@@ -108,6 +108,24 @@ size_t eap_aka_encode_attribute(EapAkaAttributeType eap_aka_attribute_type, cons
 
             return length_field * 4;
             break;
+        
+        case EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE:
+            // X25519 : 32 bytes + 1 + 1 = 34 + 2 (padding) = 36/4 = 9(length)
+            // P256-1 : 33 bytes + 1 + 1 = 35 + 1 (padding) = 36/4 = 9(length)
+            output[0] = EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE;
+            output[1] = EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH/4;
+            memset(output + 2, 0x00, 34);
+            memcpy(output + EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH - input_len, input, input_len);
+            return EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH;
+            break;
+        
+        case EAP_AKA_ATTRIBUTE_AT_KDF_FS:
+            output[0] = EAP_AKA_ATTRIBUTE_AT_KDF_FS;
+            output[1] = 1;
+            output[2] = 0x00;
+            output[3] = 0x01;
+            return 4;
+            break;
 
         default:
             return 0;
@@ -175,6 +193,10 @@ void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_
                     break;
                 case EAP_AKA_ATTRIBUTE_AT_MAC:
                     value_len = 16;
+                    value_ptr = input + i + 4;
+                    break;
+                case EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE:
+                    value_len = 32;
                     value_ptr = input + i + 4;
                     break;
                 default:

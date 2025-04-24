@@ -81,6 +81,11 @@ struct ausf_ue_s {
     uint8_t kseaf[OGS_SHA256_DIGEST_SIZE];
     uint8_t xres[OGS_MAX_RES_LEN]; // For EAP-AKA-PRIME
     uint8_t k_aut[OGS_SHA256_DIGEST_SIZE];
+    uint8_t ik_prime[OGS_KEY_LEN];
+    uint8_t ck_prime[OGS_KEY_LEN];
+    uint8_t hnPrivateKey[OGS_SHA256_DIGEST_SIZE];
+    uint8_t uePublicKey[OGS_SHA256_DIGEST_SIZE];
+
 };
 
 void ausf_context_init(void);
