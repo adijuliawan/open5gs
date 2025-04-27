@@ -434,7 +434,12 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     
     ogs_debug("[EAP_AKA_PRIME] Serving Network : [%s]", ausf_ue->serving_network_name);
 
+
+    
     // FS Extension 
+
+    /*
+    // HPQC
     // Generate ECDHE public key pair
     // generate private key
     uint8_t priv_key_ecdhe[32];
@@ -451,7 +456,7 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
 
     memcpy(ausf_ue->hnPrivateKey,priv_key_ecdhe,32);
 
-    /* Debug ECDHE*/
+    // Debug ECDHE
     char priv_key_ecdhe_string[OGS_KEYSTRLEN(32)];
     char curve25519_basepoint_string[OGS_KEYSTRLEN(32)];
     char pub_key_ecdhe_string[OGS_KEYSTRLEN(32)];
@@ -465,9 +470,9 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Private Key ECDHE : [%s]", priv_key_ecdhe_string);
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Curve25519 basepoint : [%s]", curve25519_basepoint_string);
     ogs_debug("[EAP_AKA_PRIME][NEW ENGINE] Public Key ECDHE : [%s]", pub_key_ecdhe_string);
-    /* End debug ECDHE*/
+    // End debug ECDHE
 
-    /** Start ML-KEM  */
+    // Start ML-KEM  
 
     ogs_debug("[EAP_AKA_PRIME][HPQC][ML-KEM] OQS_KEM_ml_kem_768_length_public_key: [%d]",OQS_KEM_ml_kem_768_length_public_key);
     ogs_debug("[EAP_AKA_PRIME][HPQC][ML-KEM] OQS_KEM_ml_kem_768_length_secret_key: [%d]",OQS_KEM_ml_kem_768_length_secret_key);
@@ -476,29 +481,6 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     ogs_debug("[EAP_AKA_PRIME][HPQC][ML-KEM] OQS_KEM_ml_kem_768_length_shared_secret: [%d]",OQS_KEM_ml_kem_768_length_shared_secret);
 
     // Start X-WING Key Generation 
-
-    /**
-    def expandDecapsulationKey(sk):
-        expanded = SHAKE256(sk, 96)
-        (pk_M, sk_M) = ML-KEM-768.KeyGen_internal(expanded[0:32], expanded[32:64])
-        sk_X = expanded[64:96]
-        pk_X = X25519(sk_X, X25519_BASE)
-        return (sk_M, sk_X, pk_M, pk_X)
-
-    def GenerateKeyPair():
-        sk = random(32)
-        (sk_M, sk_X, pk_M, pk_X) = expandDecapsulationKey(sk)
-        return sk, concat(pk_M, pk_X)
-    */
-
-    /*
-    sk = random(32)
-    expanded = SHAKE256(sk, 96)
-    (pk_M, sk_M) = ML-KEM-768.KeyGen_internal(expanded[0:32], expanded[32:64])
-    sk_X = expanded[64:96]
-    pk_X = X25519(sk_X, X25519_BASE)
-    return sk, concat(pk_M, pk_X)
-    */
 
     //uint8_t sk[32];
     uint8_t expanded[96];
@@ -555,10 +537,10 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     ogs_debug("[EAP_AKA_PRIME][HPQC][ML-KEM] Secret Key : [%s]", secret_key_string);
     
 
-    /*
-    sk_X = expanded[64:96]
-    pk_X = X25519(sk_X, X25519_BASE)
-    */
+    
+    //sk_X = expanded[64:96]
+    //pk_X = X25519(sk_X, X25519_BASE)
+    
 
     uint8_t sk_X[32];
     uint8_t pk_X[32];
@@ -594,9 +576,37 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
 
     memcpy(ausf_ue->sk_xwing,sk,32);
 
+    */
+
+    // PQC 
+
+    ogs_debug("[EAP_AKA_PRIME][PQC][ML-KEM] OQS_KEM_ml_kem_768_length_public_key: [%d]",OQS_KEM_ml_kem_768_length_public_key);
+    ogs_debug("[EAP_AKA_PRIME][PQC][ML-KEM] OQS_KEM_ml_kem_768_length_secret_key: [%d]",OQS_KEM_ml_kem_768_length_secret_key);
+    ogs_debug("[EAP_AKA_PRIME][PQC][ML-KEM] OQS_KEM_ml_kem_768_length_ciphertext: [%d]",OQS_KEM_ml_kem_768_length_ciphertext);
+    ogs_debug("[EAP_AKA_PRIME][PQC][ML-KEM] OQS_KEM_ml_kem_768_length_shared_secret: [%d]",OQS_KEM_ml_kem_768_length_shared_secret);
+    ogs_debug("[EAP_AKA_PRIME][PQC][ML-KEM] OQS_KEM_ml_kem_768_length_shared_secret: [%d]",OQS_KEM_ml_kem_768_length_shared_secret);
 
 
-    //uint8_t at_pub_ecdhe[EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH];
+    uint8_t public_key[OQS_KEM_ml_kem_768_length_public_key]; // 1184
+    uint8_t secret_key[OQS_KEM_ml_kem_768_length_secret_key]; // 2400
+    
+
+    OQS_KEM_ml_kem_768_keypair(public_key, secret_key);
+
+    memcpy(ausf_ue->sk,secret_key,2400);
+
+    // debug ML_KEM
+    char public_key_string[OGS_KEYSTRLEN(OQS_KEM_ml_kem_768_length_public_key)];
+    char secret_key_string[OGS_KEYSTRLEN(OQS_KEM_ml_kem_768_length_secret_key)];
+
+    ogs_hex_to_ascii(public_key, sizeof(public_key),
+        public_key_string, sizeof(public_key_string));
+    ogs_hex_to_ascii(secret_key, sizeof(secret_key),
+        secret_key_string, sizeof(secret_key_string));
+
+    ogs_debug("[EAP_AKA_PRIME][PQC][ML-KEM] Public Key : [%s]", public_key_string);
+    ogs_debug("[EAP_AKA_PRIME][PQC][ML-KEM] Secret Key : [%s]", secret_key_string);
+    // end debug ML_KEM
     
 
 
@@ -612,9 +622,10 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     size_t at_kdf_input_length = ((strlen(ausf_ue->serving_network_name) + 3)/4 + 1)*4; //36
     uint8_t at_kdf_input[at_kdf_input_length]; 
     //optional
-    uint8_t at_pub_ecdhe[EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH];
+    //uint8_t at_pub_ecdhe[EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH];
     uint8_t at_kdf_fs[EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH]; // 4
-    uint8_t at_pub_hybrid[EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH]; // 1220
+    //uint8_t at_pub_hybrid[EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH]; // 1220
+    uint8_t at_pub_kem[EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH]; // 1188
     
 
     // encode attribute
@@ -624,7 +635,8 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF_INPUT, ausf_ue->serving_network_name, strlen(ausf_ue->serving_network_name), at_kdf_input);
     eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_MAC, NULL, OGS_RAND_LEN, at_mac);
     //eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE, pub_key_ecdhe, 32, at_pub_ecdhe);
-    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID, encapsulation_key, 1216, at_pub_hybrid);
+    //eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID, encapsulation_key, 1216, at_pub_hybrid);
+    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_KEM, public_key, OQS_KEM_ml_kem_768_length_public_key, at_pub_kem);
     eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF_FS, NULL, 0, at_kdf_fs);
 
 
@@ -642,8 +654,10 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     offset+=at_kdf_input_length;
     //memcpy(data_attribute + offset, at_pub_ecdhe, EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH);
     //offset+=EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH;
-    memcpy(data_attribute + offset, at_pub_hybrid, EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH);
-    offset+=EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH;
+    //memcpy(data_attribute + offset, at_pub_hybrid, EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH);
+    //offset+=EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH;
+    memcpy(data_attribute + offset, at_pub_kem, EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH);
+    offset+=EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH;
     memcpy(data_attribute + offset, at_mac, EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH);
     offset+=EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH;
     
@@ -943,10 +957,7 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         // if FS extension is used, it need to compute MK_ECDHE. this information received at ausf-handler
 
 
-        // calculate secret key 
-        //uint8_t shared_key[32];
-        //curve25519_donna(shared_key, ausf_ue->hnPrivateKey, ausf_ue->uePublicKey);
-
+        /*
         // X-Wing 
         uint8_t ct_M[1088];
         uint8_t ct_X[32];
@@ -959,14 +970,6 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
 
 
         // Decapsulate key (sk)
-        /*
-        def expandDecapsulationKey(sk):
-            expanded = SHAKE256(sk, 96)
-            (pk_M, sk_M) = ML-KEM-768.KeyGen_internal(expanded[0:32], expanded[32:64])
-            sk_X = expanded[64:96]
-            pk_X = X25519(sk_X, X25519_BASE)
-        */
-
         uint8_t expanded[96];
     
         OQS_SHA3_shake256(expanded, 96, ausf_ue->sk_xwing, 32);
@@ -974,7 +977,6 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         uint8_t pk_M[OQS_KEM_ml_kem_768_length_public_key];
         uint8_t sk_M[OQS_KEM_ml_kem_768_length_secret_key];
         uint8_t seed[64];
-    
     
         memcpy(seed, expanded, 64);
         OQS_KEM_ml_kem_768_keypair_derand(pk_M,sk_M, seed);
@@ -1014,7 +1016,6 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         // print 
         //char shared_secret_string[OGS_KEYSTRLEN(32)];
         
-
         // ogs_hex_to_ascii(shared_secret, sizeof(shared_secret),
         // shared_secret_string, sizeof(shared_secret_string));
         // ogs_hex_to_ascii(ausf_ue->ct_xwing, sizeof(ausf_ue->ct_xwing),
@@ -1027,8 +1028,17 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         // ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing][ML_KEM] sk X-Wing: [%s]", sk_xwing_string);
         // ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing][ML_KEM] ct X-Wing : [%s]", ct_xwing_string);
 
+        */
 
-        
+        // PQC (ML_KEM)
+
+        uint8_t ct[1088];        
+        uint8_t shared_secret_key[32];
+
+        memcpy(ct, ausf_ue->ct, 1088);
+
+        OQS_KEM_ml_kem_768_decaps(shared_secret_key, ausf_ue->ct, ausf_ue->sk);
+
         /*
         
         size_t key_len = OGS_KEY_LEN*2;
@@ -1042,12 +1052,12 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         uint8_t key_prf[key_len];
         memcpy(key_prf, ausf_ue->ik_prime, 16);
         memcpy(key_prf+16, ausf_ue->ck_prime, 16);
-        memcpy(key_prf+32, shared_key, 32);
+        memcpy(key_prf+32, shared_secret_key, 32);
 
         // change prefix to use EAP-AKA'-FS
         const char *prefix = "EAP-AKA' FS";
         char *supi = ogs_id_get_value(ausf_ue->supi);
-        size_t input_len = strlen(prefix) + strlen(supi);
+        size_t input_len = strlen(prefix) + strlen(supi) + 1088; // ct length 
 
         uint8_t input[input_len];
         size_t pos = 0;
@@ -1062,13 +1072,20 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
             input[pos] = (uint8_t)supi[i];  
             pos++;
         }
+
+        for (i = 0; i < 1088; i++) {
+            input[pos] = ct[i];  
+            pos++;
+        }
+
+
         // output master key (MK) ECDHE is 1280 bits = 160 bytes
-        size_t mk_ecdhe_len = 160; 
-        uint8_t mk_ecdhe[mk_ecdhe_len];
+        size_t mk_pq_shared_secret_len = 160; 
+        uint8_t mk_pq_shared_secret[mk_pq_shared_secret_len];
 
-        ogs_prf_prime(key_prf, key_len, input, input_len, mk_ecdhe, mk_ecdhe_len);
+        ogs_prf_prime(key_prf, key_len, input, input_len, mk_pq_shared_secret, mk_pq_shared_secret_len);
 
-        memcpy(ausf_ue->kausf,mk_ecdhe+96,32);
+        memcpy(ausf_ue->kausf,mk_pq_shared_secret+96,32);
 
         /* Debug ECDHE*/
         /*
@@ -1107,7 +1124,8 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         */
         /* End debug ECDHE*/
 
-        /* Debug X-WING*/
+        /*
+        // Debug X-WING
         char ciphertext_string[OGS_KEYSTRLEN(1120)];
         char shared_key_string[OGS_KEYSTRLEN(32)];
         char mk_ecdhe_string[OGS_KEYSTRLEN(160)];
@@ -1127,16 +1145,33 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] Shared Secret Key: [%s]", shared_key_string);
         ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] MK ECDHE : [%s]", mk_ecdhe_string);
         ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] K_AUSF : [%s]", kausf_string);
+        // End debug X-WING
+        */ 
+        // Debug PQC ML_KEM 
+        char ct_string[OGS_KEYSTRLEN(1088)];
+        char sk_string[OGS_KEYSTRLEN(2400)];
+        char shared_secret_key_string[OGS_KEYSTRLEN(32)];
+        char mk_pq_shared_secret_string[OGS_KEYSTRLEN(160)];
+        char kausf_string[OGS_KEYSTRLEN(32)];
 
+        ogs_hex_to_ascii(ausf_ue->ct, sizeof(ausf_ue->ct),
+            ct_string, sizeof(ct_string));
+        ogs_hex_to_ascii(ausf_ue->sk, sizeof(ausf_ue->sk),
+            sk_string, sizeof(sk_string));
+        ogs_hex_to_ascii(shared_secret_key, sizeof(shared_secret_key),
+            shared_secret_key_string, sizeof(shared_secret_key_string));
+        ogs_hex_to_ascii(mk_pq_shared_secret, sizeof(mk_pq_shared_secret),
+            mk_pq_shared_secret_string, sizeof(mk_pq_shared_secret_string));
+        ogs_hex_to_ascii(ausf_ue->kausf, sizeof(ausf_ue->kausf),
+            kausf_string, sizeof(kausf_string));
 
-
-
-
-
-
-
-
-        /* End debug X-WING*/
+        ogs_debug("[EAP_AKA_PRIME][PQC][ML_KEM] Ciphertext: [%s]", ct_string);
+        ogs_debug("[EAP_AKA_PRIME][PQC][ML_KEM] Secret key: [%s]", sk_string);
+        ogs_debug("[EAP_AKA_PRIME][PQC][ML_KEM] Shared Secret Key: [%s]", shared_secret_key_string);
+        ogs_debug("[EAP_AKA_PRIME][PQC][ML_KEM] MK_PQ_SHARED_SECRET : [%s]", mk_pq_shared_secret_string);
+        ogs_debug("[EAP_AKA_PRIME][PQC][ML_KEM] K_AUSF : [%s]", kausf_string);
+        // END Debug PQC ML_KEM 
+        
 
 
         ogs_kdf_kseaf(ausf_ue->serving_network_name,

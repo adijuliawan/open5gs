@@ -18,6 +18,8 @@ extern "C" {
 #define EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH                     4
 #define EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH               36
 #define EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH              1220
+#define EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH                 1188
+#define EAP_AKA_ATTRIBUTE_AT_KEM_CT_LENGTH                  1092
 
 /*
 EAP Packet (RFC 3748)
@@ -149,7 +151,9 @@ typedef enum {
     EAP_AKA_ATTRIBUTE_AT_BIDDING                    = 136,
     EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE                  = 152,
     EAP_AKA_ATTRIBUTE_AT_KDF_FS                     = 153,
-    EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID                 = 154
+    EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID                 = 154,
+    EAP_AKA_ATTRIBUTE_AT_PUB_KEM                    = 155,
+    EAP_AKA_ATTRIBUTE_AT_KEM_CT                     = 156
 
 } EapAkaAttributeType;
 

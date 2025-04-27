@@ -130,6 +130,17 @@ size_t eap_aka_encode_attribute(EapAkaAttributeType eap_aka_attribute_type, cons
             return EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH;
             break;
         
+        case EAP_AKA_ATTRIBUTE_AT_PUB_KEM:
+            // MK_KEM : 1184 bytes + 2 + 1 = 1187 + 1 (padding) = 1188/4 = 299(length)
+            output[0] = EAP_AKA_ATTRIBUTE_AT_PUB_KEM;
+            size_t length_pub_kem = EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH/4;
+            eap_int_to_bytes_be((uint16_t)length_pub_kem, output + 1);
+
+            memset(output + 3, 0x00, 1);
+            memcpy(output + 4, input, 1184);
+            return EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH;
+            break;
+        
         case EAP_AKA_ATTRIBUTE_AT_KDF_FS:
             output[0] = EAP_AKA_ATTRIBUTE_AT_KDF_FS;
             output[1] = 1;
@@ -191,6 +202,11 @@ void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_
             //uint16_t len_units = 281;
             attr_total_len = 1124;
         }
+        else if(type==EAP_AKA_ATTRIBUTE_AT_KEM_CT){
+            //uint8_t len_units = input[i + 1];
+            //uint16_t len_units = 281;
+            attr_total_len = 1092;
+        }
         else{
             uint8_t len_units = input[i + 1];
             attr_total_len = len_units * 4;
@@ -222,6 +238,10 @@ void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_
                     break;
                 case EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID:
                     value_len = 1120;
+                    value_ptr = input + i + 4;
+                    break;
+                case EAP_AKA_ATTRIBUTE_AT_KEM_CT:
+                    value_len = 1088;
                     value_ptr = input + i + 4;
                     break;
                 default:

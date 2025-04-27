@@ -87,6 +87,8 @@ struct ausf_ue_s {
     uint8_t uePublicKey[OGS_SHA256_DIGEST_SIZE];
     uint8_t ct_xwing[1120];
     uint8_t sk_xwing[32];
+    uint8_t ct[1088];
+    uint8_t sk[2400];
 
 };
 
