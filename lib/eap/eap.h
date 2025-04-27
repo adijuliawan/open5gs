@@ -17,6 +17,7 @@ extern "C" {
 #define EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH                     20
 #define EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH                     4
 #define EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH               36
+#define EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH              1220
 
 /*
 EAP Packet (RFC 3748)
@@ -147,7 +148,8 @@ typedef enum {
     EAP_AKA_ATTRIBUTE_AT_RESULT_IND                 = 135,
     EAP_AKA_ATTRIBUTE_AT_BIDDING                    = 136,
     EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE                  = 152,
-    EAP_AKA_ATTRIBUTE_AT_KDF_FS                     = 153
+    EAP_AKA_ATTRIBUTE_AT_KDF_FS                     = 153,
+    EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID                 = 154
 
 } EapAkaAttributeType;
 
@@ -237,6 +239,7 @@ void eap_aka_encode_packet(eap_aka_packet_t *packet, uint8_t *output);
 size_t eap_aka_encode_attribute(EapAkaAttributeType eap_aka_attribute_type, const void *input, size_t input_len, uint8_t *output);
 
 void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output);
+void eap_aka_decode_attribute_debug(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output, size_t *debug_val_input, size_t* debug_value_len);
 
 void eap_aka_clean_mac(EapAkaAttributeType eap_aka_attribute_type ,uint8_t *input, size_t input_len, uint8_t *output);
 

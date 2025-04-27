@@ -119,6 +119,17 @@ size_t eap_aka_encode_attribute(EapAkaAttributeType eap_aka_attribute_type, cons
             return EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH;
             break;
         
+        case EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID:
+            // X-Wing : 1216 bytes + 2 + 1 = 1219 + 1 (padding) = 1220/4 = 305(length)
+            output[0] = EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID;
+            size_t length_pub_hybrid = EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH/4;
+            eap_int_to_bytes_be((uint16_t)length_pub_hybrid, output + 1);
+
+            memset(output + 3, 0x00, 1);
+            memcpy(output + 4, input, 1216);
+            return EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH;
+            break;
+        
         case EAP_AKA_ATTRIBUTE_AT_KDF_FS:
             output[0] = EAP_AKA_ATTRIBUTE_AT_KDF_FS;
             output[1] = 1;
@@ -173,11 +184,21 @@ void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_
 
     while (i + 2 <= input_len) {
         uint8_t type = input[i];
-        uint8_t len_units = input[i + 1];
-        size_t attr_total_len = len_units * 4;
+        size_t attr_total_len = 0;
 
-        if (attr_total_len < 4 || i + attr_total_len > input_len)
-            break;  // malformed or truncated
+        if(type==EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID){
+            //uint8_t len_units = input[i + 1];
+            //uint16_t len_units = 281;
+            attr_total_len = 1124;
+        }
+        else{
+            uint8_t len_units = input[i + 1];
+            attr_total_len = len_units * 4;
+        }
+        
+
+        //if (attr_total_len < 4 || i + attr_total_len > input_len)
+        //    break;  // malformed or truncated
 
         if (type == eap_aka_attribute_type) {
             size_t value_len = 0;
@@ -198,6 +219,73 @@ void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_
                 case EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE:
                     value_len = 32;
                     value_ptr = input + i + 4;
+                    break;
+                case EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID:
+                    value_len = 1120;
+                    value_ptr = input + i + 4;
+                    break;
+                default:
+                    return;
+            }
+
+            // Fill output
+            memcpy(output, value_ptr, value_len);
+            return;
+        }
+
+        i += attr_total_len;
+    }
+    
+}
+
+void eap_aka_decode_attribute_debug(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output, size_t *debug_val_input, size_t *debug_value_len)
+{   
+    //start from 8
+    size_t i = 8; 
+
+    while (i + 2 <= input_len) {
+        uint8_t type = input[i];
+        size_t attr_total_len = 0;
+
+        if(type==EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID){
+            //uint8_t len_units = input[i + 1];
+            //uint16_t len_units = 281;
+            attr_total_len = 1124;
+        }
+        else{
+            uint8_t len_units = input[i + 1];
+            attr_total_len = len_units * 4;
+        }
+        
+
+        //if (attr_total_len < 4 || i + attr_total_len > input_len)
+        //    break;  // malformed or truncated
+
+        if (type == eap_aka_attribute_type) {
+            size_t value_len = 0;
+            const uint8_t *value_ptr = NULL;
+
+            switch (type) {
+                case EAP_AKA_ATTRIBUTE_AT_RES: 
+                    if (attr_total_len < 4) return;
+                    uint16_t bit_len = (input[i + 2] << 8) | input[i + 3];
+                    value_len = bit_len / 8;
+                    if (value_len > attr_total_len - 4) return;
+                    value_ptr = input + i + 4;
+                    break;
+                case EAP_AKA_ATTRIBUTE_AT_MAC:
+                    value_len = 16;
+                    value_ptr = input + i + 4;
+                    break;
+                case EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE:
+                    value_len = 32;
+                    value_ptr = input + i + 4;
+                    break;
+                case EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID:
+                    value_len = 1120;
+                    value_ptr = input + i + 4;
+                    *debug_val_input = i;
+                    *debug_value_len = value_len;
                     break;
                 default:
                     return;

@@ -35,7 +35,7 @@ libausf_sources = files('''
 libausf = static_library('ausf',
     sources : libausf_sources,
     dependencies : [libcrypt_dep,
-                    libsbi_dep],
+                    libsbi_dep, liboqs_dep],
     install : false)
 
 libausf_dep = declare_dependency(

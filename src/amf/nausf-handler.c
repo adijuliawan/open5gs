@@ -285,6 +285,8 @@ static int amf_nausf_auth_handle_authenticate_eap_aka_prime(
     
     // AMF only forward eap payload from AUSF to UE
     size_t payload_len = strlen(AuthData->eap_payload.eap_payload);
+    ogs_debug("[EAP_AKA_PRIME][HPQC] EAP payload from AuthData %ld", payload_len);
+    ogs_debug("[EAP_AKA_PRIME][HPQC] EAP payload AMF_UE %ld", sizeof(amf_ue->eap_payload));
     if (payload_len > sizeof(amf_ue->eap_payload)) {
         ogs_error("[%s] EAP payload too long", amf_ue->suci);
         return OGS_ERROR;

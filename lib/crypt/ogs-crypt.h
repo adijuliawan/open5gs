@@ -57,8 +57,10 @@ extern "C" {
 #define OGS_AUTS_LEN                    14
 #define OGS_MAX_RES_LEN                 16
 #define OGS_MAC_S_LEN                   8
-/* Max EAP Payload size is defined in TS 24.501 9.11.2.2 */
-#define OGS_MAX_EAP_PAYLOAD_LEN         1503
+/* Max EAP Payload size is defined in TS 24.501 9.11.2.2 
+1503, but if use PQC, we need more size, so temporary increase the size to 1900
+*/
+#define OGS_MAX_EAP_PAYLOAD_LEN         1900 
 
 #define OGS_SQN_XOR_AK_LEN              6
 #define OGS_AK_LEN                      6

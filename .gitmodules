@@ -1,0 +1,3 @@
+[submodule "subprojects/liboqs"]
+	path = subprojects/liboqs
+	url = https://github.com/open-quantum-safe/liboqs.git
