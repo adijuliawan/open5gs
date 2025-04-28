@@ -85,97 +85,79 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
     uint8_t eap_response_decoded[OGS_MAX_EAP_PAYLOAD_LEN];
     size_t eap_reponse_len = ogs_base64_decode_binary(eap_response_decoded,EapSession->eap_payload);
     uint8_t eap_response_mac_input[eap_reponse_len];
-
-
-
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload: [%s]", EapSession->eap_payload);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload Decode Length: [%ld]", eap_reponse_len);
-    
-
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload[0]: [%02x]", eap_response_decoded[0]);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload[1]: [%02x]", eap_response_decoded[1]);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload[2]: [%02x]", eap_response_decoded[2]);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload[3]: [%02x]", eap_response_decoded[3]);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload[4]: [%02x]", eap_response_decoded[4]);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Payload[5]: [%02x]", eap_response_decoded[5]);
-    
-    
-    
     
     if (eap_reponse_len == 0)
         ogs_error("[EAP_AKA_PRIME] eap_payload not decoded ");
 
     uint8_t at_res[8];
     uint8_t at_mac[16];
-    //uint8_t at_pub_ecdhe[32];
+    uint8_t at_pub_ecdhe[32];
     uint8_t at_pub_hybrid[1120];
+
+    /*
+    RFC 9678 - Section 6.5.4 EAP-Response/AKA'-Challenge
+
+    If the Server has proposed the use of the extension specified in this 
+    protocol, but the Peer ignores and continues the basic EAP-AKA' 
+    authentication, the Server makes a policy decision of whether this is 
+    allowed. If this is allowed, it continues the EAP-AKA' authentication 
+    to completion. If it is not allowed, the Server MUST behave as if 
+    authentication failed.
+    */
+    // Policy : Not Allowed 
 
     uint8_t xmac[OGS_SHA256_DIGEST_SIZE];
 
     //create new copy of eap_request, clean at_mac for integrity check (at_mac)
     eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_RES, eap_response_decoded, eap_reponse_len, at_res);
     eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_MAC, eap_response_decoded, eap_reponse_len, at_mac);
-    //eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE, eap_response_decoded, eap_reponse_len, at_pub_ecdhe);
-    eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID, eap_response_decoded, eap_reponse_len, at_pub_hybrid);
 
-    //size_t debug_val_input;
-    //size_t debug_value_len;
-    //eap_aka_decode_attribute_debug(EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID, eap_response_decoded, eap_reponse_len, at_pub_hybrid,&debug_val_input,&debug_value_len);
-
-    //ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] AT_PUB_HYBRID Input: [%ld]", debug_val_input);
-    //ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] AT_PUB_HYBRID Value Len: [%ld]", debug_value_len);
-
-    //debug 
-    char at_res_string[OGS_KEYSTRLEN(8)];
-    char at_mac_string[OGS_KEYSTRLEN(16)];
-    char at_pub_hybrid_string[OGS_KEYSTRLEN(1120)];
-    char eap_respon_string[OGS_KEYSTRLEN(eap_reponse_len)];
-
-    ogs_hex_to_ascii(at_res, sizeof(at_res),
-        at_res_string, sizeof(at_res_string));
-    ogs_hex_to_ascii(at_mac, sizeof(at_mac),
-        at_mac_string, sizeof(at_mac_string));
-
-    ogs_hex_to_ascii(at_pub_hybrid, sizeof(at_pub_hybrid),
-        at_pub_hybrid_string, sizeof(at_pub_hybrid_string));
-    ogs_hex_to_ascii(eap_response_decoded, sizeof(eap_response_decoded),
-        eap_respon_string, sizeof(eap_respon_string));
-
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] EAP-Response: [%s]", eap_respon_string);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] AT_RES: [%s]", at_res_string);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] AT_MAC: [%s]", at_mac_string);
-    ogs_debug("[EAP_AKA_PRIME][HPQC][X-Wing] AT_PUB_HYBRID: [%s]", at_pub_hybrid_string);
+    size_t fs_extension_status = eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE, eap_response_decoded, eap_reponse_len, at_pub_ecdhe);
+    size_t hpqc_extension_status = eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID, eap_response_decoded, eap_reponse_len, at_pub_hybrid);
 
     eap_aka_clean_mac(EAP_AKA_ATTRIBUTE_AT_MAC, eap_response_decoded, eap_reponse_len, eap_response_mac_input);    
 
     //mac calculation 
     ogs_hmac_sha256(ausf_ue->k_aut, 32, eap_response_mac_input, eap_reponse_len, xmac, OGS_SHA256_DIGEST_SIZE);
 
-    // if FS extension is used, it need to decode AT_PUB_ECDHE, and derived k_ausf from MK_ECDHE 
-
-
-    //ogs_log_hexdump(OGS_LOG_DEBUG, xmac, OGS_SHA256_DIGEST_SIZE);
-
-    if (memcmp(xmac, at_mac, OGS_SHA256_DIGEST_SIZE/2) != 0 && false) {
-        ogs_log_hexdump(OGS_LOG_WARN, xmac, OGS_SHA256_DIGEST_SIZE);
-        ogs_log_hexdump(OGS_LOG_WARN, at_mac, OGS_SHA256_DIGEST_SIZE/2);
-        ogs_error("MAC Failure!");
-
+    if(EAP_AKA_PRIME_EXTENSION==1 && fs_extension_status == 0){
+        // No AT_PUB_ECDHE in EAP-Response 
+        ogs_error("AT_PUB_ECDHE not found in EAP Response");
         ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
-    } else if (memcmp(at_res, ausf_ue->xres, OGS_MAX_RES_LEN/2) != 0) {
-        ogs_log_hexdump(OGS_LOG_WARN, at_res, OGS_MAX_RES_LEN);
-        ogs_log_hexdump(OGS_LOG_WARN, ausf_ue->xres, OGS_MAX_RES_LEN);
-
+    }
+    else if(EAP_AKA_PRIME_EXTENSION==2 && hpqc_extension_status == 0){
+        // No AT_PUB_HYBRID in EAP Ressponse
+        ogs_error("AT_PUB_HYBRID not found in EAP Response");
         ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
-    } else {
-        ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_SUCCESS;
-        // if FS extension is used, it need to decode AT_PUB_ECDHE, and derived k_ausf from MK_ECDHE 
-        //memcpy(ausf_ue->uePublicKey,at_pub_ecdhe,32);
-        memcpy(ausf_ue->ct_xwing,at_pub_hybrid,1120);
+    }
+    else{
+        // now check AT_MAC and AT_RES 
+        if (memcmp(xmac, at_mac, OGS_SHA256_DIGEST_SIZE/2) != 0 ) {
+            ogs_log_hexdump(OGS_LOG_WARN, xmac, OGS_SHA256_DIGEST_SIZE);
+            ogs_log_hexdump(OGS_LOG_WARN, at_mac, OGS_SHA256_DIGEST_SIZE/2);
+            ogs_error("MAC Failure!");
+    
+            ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
+        } else if (memcmp(at_res, ausf_ue->xres, OGS_MAX_RES_LEN/2) != 0) {
+            ogs_log_hexdump(OGS_LOG_WARN, at_res, OGS_MAX_RES_LEN);
+            ogs_log_hexdump(OGS_LOG_WARN, ausf_ue->xres, OGS_MAX_RES_LEN);
+    
+            ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
+        } else {
+            ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_SUCCESS;
 
-
+            // check extension 
+            if(EAP_AKA_PRIME_EXTENSION==1){
+                memcpy(ausf_ue->uePublicKey,at_pub_ecdhe,32);
+            }
+            else if(EAP_AKA_PRIME_EXTENSION==2){
+                memcpy(ausf_ue->ct_xwing,at_pub_hybrid,1120);
+            }
+    
+        }
 
     }
+    
 
     r = ausf_sbi_discover_and_send(
             OGS_SBI_SERVICE_TYPE_NUDM_UEAU, NULL,

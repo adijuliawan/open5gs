@@ -10,10 +10,10 @@ libeap = library('ogseap',
     version : libogslib_version,
     c_args : '-DOGS_EAP_COMPILATION',
     include_directories : [libeap_inc,libinc],
-    dependencies: [libcore_dep],
+    dependencies: [libcore_dep, libcrypt_dep],
     install: true)
 
 libeap_dep = declare_dependency(
     link_with : libeap,
     include_directories : [libeap_inc, libinc],
-    dependencies: [libcore_dep])
+    dependencies: [libcore_dep, libcrypt_dep])

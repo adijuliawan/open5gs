@@ -4,6 +4,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include "../crypt/ogs-crypt.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -16,8 +17,12 @@ extern "C" {
 #define EAP_AKA_ATTRIBUTE_AT_AUTS_LENGTH                    20
 #define EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH                     20
 #define EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH                     4
+#define EAP_AKA_ATTRIBUTE_AT_KDF_FS_LENGTH                  4
 #define EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH               36
 #define EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH              1220
+
+#define EAP_SHA256_BLOCK_SIZE  ( 512 / 8)
+#define EAP_SHA256_DIGEST_SIZE ( 256 / 8)
 
 /*
 EAP Packet (RFC 3748)
@@ -216,7 +221,6 @@ typedef struct eap_aka_attribute_data
     uint16_t length; // length of value in bytes, not length in attribute
     uint8_t value[];
 } eap_aka_attribute_data_t;
-    
 
 // create EAP-AKA Request 
 /**
@@ -238,8 +242,7 @@ void eap_aka_encode_packet(eap_aka_packet_t *packet, uint8_t *output);
 
 size_t eap_aka_encode_attribute(EapAkaAttributeType eap_aka_attribute_type, const void *input, size_t input_len, uint8_t *output);
 
-void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output);
-void eap_aka_decode_attribute_debug(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output, size_t *debug_val_input, size_t* debug_value_len);
+size_t eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output);
 
 void eap_aka_clean_mac(EapAkaAttributeType eap_aka_attribute_type ,uint8_t *input, size_t input_len, uint8_t *output);
 
@@ -248,6 +251,21 @@ uint8_t eap_next_id(uint8_t id);
 void eap_int_to_bytes_be(uint16_t value, uint8_t *out);
 
 void eap_pad_zeros(const uint8_t *input, size_t input_len, uint8_t *output, size_t padded_len);
+
+void eap_prf_prime(uint8_t *key, size_t key_len, uint8_t *input, size_t input_len, uint8_t *output, size_t output_len);
+
+
+
+void eap_hmac_sha256_init(ogs_hmac_sha256_ctx *ctx, const uint8_t *key,
+    uint32_t key_size);
+void eap_hmac_sha256_reinit(ogs_hmac_sha256_ctx *ctx);
+void eap_hmac_sha256_update(ogs_hmac_sha256_ctx *ctx, const uint8_t *message,
+      uint32_t message_len);
+void eap_hmac_sha256_final(ogs_hmac_sha256_ctx *ctx, uint8_t *mac,
+     uint32_t mac_size);
+void eap_hmac_sha256(const uint8_t *key, uint32_t key_size,
+    const uint8_t *message, uint32_t message_len,
+    uint8_t *mac, uint32_t mac_size);
 
 
 

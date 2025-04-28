@@ -1,6 +1,7 @@
 #include "eap.h"
 #include <stdio.h>
 #include "../core/ogs-core.h"
+#include "../crypt/ogs-crypt.h"
 
 uint8_t id = 100;
 const uint16_t EAP_AKA_REQUEST_MIN_LENGTH = 8;
@@ -177,7 +178,7 @@ void eap_aka_encode_packet(eap_aka_packet_t *packet, uint8_t *output)
 }
 
 
-void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output)
+size_t eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output)
 {   
     //start from 8
     size_t i = 8; 
@@ -206,10 +207,10 @@ void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_
 
             switch (type) {
                 case EAP_AKA_ATTRIBUTE_AT_RES: 
-                    if (attr_total_len < 4) return;
+                    if (attr_total_len < 4) return 0;
                     uint16_t bit_len = (input[i + 2] << 8) | input[i + 3];
                     value_len = bit_len / 8;
-                    if (value_len > attr_total_len - 4) return;
+                    if (value_len > attr_total_len - 4) return 0;
                     value_ptr = input + i + 4;
                     break;
                 case EAP_AKA_ATTRIBUTE_AT_MAC:
@@ -225,81 +226,20 @@ void eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint8_
                     value_ptr = input + i + 4;
                     break;
                 default:
-                    return;
+                    return 0;
             }
 
             // Fill output
             memcpy(output, value_ptr, value_len);
-            return;
+            return value_len;
         }
 
         i += attr_total_len;
     }
     
+    return 0;
 }
 
-void eap_aka_decode_attribute_debug(EapAkaAttributeType eap_aka_attribute_type, uint8_t *input, size_t input_len, uint8_t *output, size_t *debug_val_input, size_t *debug_value_len)
-{   
-    //start from 8
-    size_t i = 8; 
-
-    while (i + 2 <= input_len) {
-        uint8_t type = input[i];
-        size_t attr_total_len = 0;
-
-        if(type==EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID){
-            //uint8_t len_units = input[i + 1];
-            //uint16_t len_units = 281;
-            attr_total_len = 1124;
-        }
-        else{
-            uint8_t len_units = input[i + 1];
-            attr_total_len = len_units * 4;
-        }
-        
-
-        //if (attr_total_len < 4 || i + attr_total_len > input_len)
-        //    break;  // malformed or truncated
-
-        if (type == eap_aka_attribute_type) {
-            size_t value_len = 0;
-            const uint8_t *value_ptr = NULL;
-
-            switch (type) {
-                case EAP_AKA_ATTRIBUTE_AT_RES: 
-                    if (attr_total_len < 4) return;
-                    uint16_t bit_len = (input[i + 2] << 8) | input[i + 3];
-                    value_len = bit_len / 8;
-                    if (value_len > attr_total_len - 4) return;
-                    value_ptr = input + i + 4;
-                    break;
-                case EAP_AKA_ATTRIBUTE_AT_MAC:
-                    value_len = 16;
-                    value_ptr = input + i + 4;
-                    break;
-                case EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE:
-                    value_len = 32;
-                    value_ptr = input + i + 4;
-                    break;
-                case EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID:
-                    value_len = 1120;
-                    value_ptr = input + i + 4;
-                    *debug_val_input = i;
-                    *debug_value_len = value_len;
-                    break;
-                default:
-                    return;
-            }
-
-            // Fill output
-            memcpy(output, value_ptr, value_len);
-            return;
-        }
-
-        i += attr_total_len;
-    }
-    
-}
 
 void eap_aka_clean_mac(EapAkaAttributeType eap_aka_attribute_type ,uint8_t *input, size_t input_len, uint8_t *output)
 {
@@ -309,9 +249,22 @@ void eap_aka_clean_mac(EapAkaAttributeType eap_aka_attribute_type ,uint8_t *inpu
     size_t i = 8; 
 
     while (i + 2 <= input_len) {
+        // uint8_t type = input[i];
+        // uint8_t len_units = input[i + 1];
+        // size_t attr_total_len = len_units * 4;
+
         uint8_t type = input[i];
-        uint8_t len_units = input[i + 1];
-        size_t attr_total_len = len_units * 4;
+        size_t attr_total_len = 0;
+
+        if(type==EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID){
+            //uint8_t len_units = input[i + 1];
+            //uint16_t len_units = 281;
+            attr_total_len = 1124;
+        }
+        else{
+            uint8_t len_units = input[i + 1];
+            attr_total_len = len_units * 4;
+        }
 
         if (attr_total_len < 4 || i + attr_total_len > input_len)
             break;  // malformed or truncated
@@ -333,6 +286,138 @@ void eap_aka_clean_mac(EapAkaAttributeType eap_aka_attribute_type ,uint8_t *inpu
     }
 }
 
+void eap_prf_prime(uint8_t *key, size_t key_len, uint8_t *input, size_t input_len, uint8_t *output, size_t output_len)
+{
+    ogs_assert(key);
+    ogs_assert(input);
+
+    int i = 0;
+    int round = output_len / 32 + 1;  
+    uint8_t *s = NULL;
+
+    uint8_t **T = calloc(round, sizeof(uint8_t *));
+   
+    for (i = 0; i < round ; i++){
+        int s_len = (i == 0 ? 0 : 32) + input_len + 1;
+
+        s = ogs_calloc(1, s_len);
+        
+        if(!s){
+            ogs_free(s);
+        }
+
+        int pos = 0;
+        if (i == 0) {
+            memcpy(s + pos, input, input_len);
+            pos += input_len;
+        } else {
+            memcpy(s + pos, T[i - 1], 32);
+            pos += 32;
+            memcpy(s + pos, input, input_len);
+            pos += input_len;
+        }
+
+        s[pos++] = (uint8_t)(i + 1);
+        
+        T[i] = malloc(EAP_SHA256_BLOCK_SIZE);
+        
+        eap_hmac_sha256(key, key_len , s, s_len,  T[i], 32);
+
+        ogs_free(s);
+        
+    } 
+
+    size_t total_len = round * 32;
+    uint8_t result[total_len];
+
+    for (i = 0; i < round; i++) {
+        memcpy(result + i * 32, T[i], 32);
+        free(T[i]);
+    }
+
+    memcpy(output, result, output_len);
+}
+
+
+/* HMAC-SHA-256 functions */
+
+void eap_hmac_sha256_init(ogs_hmac_sha256_ctx *ctx, const uint8_t *key,
+    uint32_t key_size)
+{
+    uint32_t fill;
+    uint32_t num;
+
+    uint8_t key_temp[EAP_SHA256_BLOCK_SIZE];
+    int i;
+
+    if (key_size > EAP_SHA256_BLOCK_SIZE){
+        num = EAP_SHA256_DIGEST_SIZE;
+        ogs_sha256(key, key_size, key_temp);
+    } else { /* key_size <= EAP_SHA256_BLOCK_SIZE */
+        memcpy(key_temp, key, sizeof(key_temp));
+        num = key_size;
+    }
+    fill = EAP_SHA256_BLOCK_SIZE - num;
+
+    memset(ctx->block_ipad + num, 0x36, fill);
+    memset(ctx->block_opad + num, 0x5c, fill);
+    //}
+
+    for (i = 0; i < num; i++) {
+        ctx->block_ipad[i] = key_temp[i] ^ 0x36;
+        ctx->block_opad[i] = key_temp[i] ^ 0x5c;
+    }
+
+    ogs_sha256_init(&ctx->ctx_inside);
+    ogs_sha256_update(&ctx->ctx_inside, ctx->block_ipad, EAP_SHA256_BLOCK_SIZE);
+
+    ogs_sha256_init(&ctx->ctx_outside);
+    ogs_sha256_update(&ctx->ctx_outside, ctx->block_opad,
+        EAP_SHA256_BLOCK_SIZE);
+
+    /* for hmac_reinit */
+    memcpy(&ctx->ctx_inside_reinit, &ctx->ctx_inside,
+    sizeof(ogs_sha256_ctx));
+    memcpy(&ctx->ctx_outside_reinit, &ctx->ctx_outside,
+    sizeof(ogs_sha256_ctx));
+}
+
+void eap_hmac_sha256_reinit(ogs_hmac_sha256_ctx *ctx)
+{
+    memcpy(&ctx->ctx_inside, &ctx->ctx_inside_reinit,
+    sizeof(ogs_sha256_ctx));
+    memcpy(&ctx->ctx_outside, &ctx->ctx_outside_reinit,
+    sizeof(ogs_sha256_ctx));
+}
+
+void eap_hmac_sha256_update(ogs_hmac_sha256_ctx *ctx, const uint8_t *message,
+                        uint32_t message_len)
+{
+    ogs_sha256_update(&ctx->ctx_inside, message, message_len);
+}
+
+void eap_hmac_sha256_final(ogs_hmac_sha256_ctx *ctx, uint8_t *mac,
+                        uint32_t mac_size)
+{
+    uint8_t digest_inside[EAP_SHA256_DIGEST_SIZE];
+    uint8_t mac_temp[EAP_SHA256_DIGEST_SIZE];
+
+    ogs_sha256_final(&ctx->ctx_inside, digest_inside);
+    ogs_sha256_update(&ctx->ctx_outside, digest_inside, EAP_SHA256_DIGEST_SIZE);
+    ogs_sha256_final(&ctx->ctx_outside, mac_temp);
+    memcpy(mac, mac_temp, mac_size);
+}
+
+void eap_hmac_sha256(const uint8_t *key, uint32_t key_size,
+                const uint8_t *message, uint32_t message_len,
+                uint8_t *mac, uint32_t mac_size)
+{
+    ogs_hmac_sha256_ctx ctx;
+
+    eap_hmac_sha256_init(&ctx, key, key_size);
+    eap_hmac_sha256_update(&ctx, message, message_len);
+    eap_hmac_sha256_final(&ctx, mac, mac_size);
+}
 
 
 

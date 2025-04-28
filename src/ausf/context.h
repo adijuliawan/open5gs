@@ -35,6 +35,12 @@ extern int __ausf_log_domain;
 #undef OGS_LOG_DOMAIN
 #define OGS_LOG_DOMAIN __ausf_log_domain
 
+// need to setting EAP-AKA-PRIME Extension 
+// 0 : No Extension (EAP-AKA-PRIME)
+// 1 : With FS Extension (EAP-AKA-PRIME-FS)
+// 2 : With Hybrid PQC Extension (EAP-AKA-PRIME-HPQC)
+#define EAP_AKA_PRIME_EXTENSION  0
+
 typedef struct ausf_context_s {
     ogs_list_t      ausf_ue_list;
     ogs_hash_t      *suci_hash;

@@ -64,30 +64,9 @@ void ogs_prf_prime(uint8_t *key, size_t key_len, uint8_t *input, size_t input_le
 
         s[pos++] = (uint8_t)(i + 1);
         
-
         T[i] = malloc(OGS_SHA256_DIGEST_SIZE);
         
         ogs_hmac_sha256(key, key_len , s, s_len,  T[i], 32);
-
-        char input_str[2*pos+1]; // 32 bytes * 2 hex chars + 1 null terminator
-        int k;
-        for (k = 0; k < pos; k++) {
-            // Write exactly 2 characters into each pair slot
-            snprintf(&input_str[k * 2], 3, "%02x", s[k]);
-            // 3 = 2 digits + 1 null-terminator for that slot
-        }
-        input_str[2*pos] = '\0';
-        ogs_debug("[EAP_AKA_PRIME][PRF'] Round[%d] S[%s] ",i+1,input_str);
-
-        char output_str[2*32+1]; // 32 bytes * 2 hex chars + 1 null terminator
-        
-        for (k = 0; k < 32; k++) {
-            // Write exactly 2 characters into each pair slot
-            snprintf(&output_str[k * 2], 3, "%02x", T[i][k]);
-            // 3 = 2 digits + 1 null-terminator for that slot
-        }
-        output_str[2*32] = '\0';
-        ogs_debug("[EAP_AKA_PRIME][PRF'] Round[%d] Output_T[%d][%s] ",i+1,i+1,output_str);
 
         ogs_free(s);
         
