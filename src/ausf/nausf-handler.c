@@ -21,8 +21,6 @@
 #include "nnrf-handler.h"
 #include "nausf-handler.h"
 #include "eap/eap.h"
-#include "oqs/oqs.h"
-#include "oqs/sha3.h"
 
 bool ausf_nausf_auth_handle_authenticate(ausf_ue_t *ausf_ue,
         ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)

@@ -31,3 +31,21 @@ libeap_dep = declare_dependency(
         '-L' + meson.current_source_dir(), '-loqs'
     ],
 )  
+
+
+#libeap_inc = include_directories('.')
+#
+#liboqs_dep = declare_dependency(
+#    include_directories: include_directories('./oqs'),
+#    link_args: [
+#        '-L' + meson.current_source_dir(), '-loqs'
+#    ]
+#)
+#
+#libeap_dep = declare_dependency(
+#    include_directories: [libeap_inc, libinc],
+#    link_args: [
+#        '-L' + meson.current_source_dir(), '-logseap'
+#    ],
+#    dependencies: [libcore_dep,liboqs_dep]
+#)
