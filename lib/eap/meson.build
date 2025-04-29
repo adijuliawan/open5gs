@@ -5,15 +5,29 @@ libeap_sources = files('''
 
 libeap_inc = include_directories('.')
 
-libeap = library('ogseap',
+#liboqs = cc.find_library('liboqs', dirs: meson.current_source_dir())
+
+libeap = static_library('ogseap',
     sources : libeap_sources,
-    version : libogslib_version,
+    #version : libogslib_version,
     c_args : '-DOGS_EAP_COMPILATION',
     include_directories : [libeap_inc,libinc],
     dependencies: [libcore_dep, libcrypt_dep],
     install: true)
 
+#libeap_dep = declare_dependency(
+#    link_with : libeap,
+#    include_directories : [libeap_inc, libinc],
+#    dependencies: [libcore_dep, libcrypt_dep]
+#    #link_args: ['-L' + meson.current_source_dir(), '-logseap'],
+#)
+
 libeap_dep = declare_dependency(
     link_with : libeap,
     include_directories : [libeap_inc, libinc],
-    dependencies: [libcore_dep, libcrypt_dep])
+    #dependencies: [libcore_dep, libcrypt_dep]
+    link_args: [
+        '-L' + meson.current_source_dir(), '-logseap',
+        '-L' + meson.current_source_dir(), '-loqs'
+    ],
+)  

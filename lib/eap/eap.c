@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include "../core/ogs-core.h"
 #include "../crypt/ogs-crypt.h"
+#include "oqs/oqs.h"
+#include "oqs/sha3.h"
 
 uint8_t id = 100;
 const uint16_t EAP_AKA_REQUEST_MIN_LENGTH = 8;
@@ -419,6 +421,167 @@ void eap_hmac_sha256(const uint8_t *key, uint32_t key_size,
     eap_hmac_sha256_final(&ctx, mac, mac_size);
 }
 
+void eap_aka_prime_fs_key_generation(uint8_t *priv_key_ecdhe, uint8_t *pub_key_ecdhe){
+
+    // generate random private key
+    priv_key_ecdhe[0] &= 248;
+    priv_key_ecdhe[31] &= 127;
+    priv_key_ecdhe[31] |= 64;
+
+    static const uint8_t curve25519_basepoint[32] = {9};
+    
+    curve25519_donna(pub_key_ecdhe, priv_key_ecdhe, curve25519_basepoint);
+}
+
+void eap_aka_prime_fs_generate_shared_key(uint8_t *shared_key, uint8_t *priv_key_ecdhe, uint8_t *pub_key_ecdhe){
+    curve25519_donna(shared_key, priv_key_ecdhe, pub_key_ecdhe);
+}
+
+void eap_aka_prime_hpqc_xwing_key_generation(uint8_t *decapsulation_key, uint8_t *encapsulation_key){
+    uint8_t expanded[96];
+    uint8_t sk[32];
+
+    OQS_randombytes(sk, 32);
+
+    // randomize sk
+    //sk[0] &= 248;
+    //sk[31] &= 127;
+    //sk[31] |= 64;
+    
+    OQS_SHA3_shake256(expanded, 96, sk, 32);
+
+    uint8_t public_key[OQS_KEM_ml_kem_768_length_public_key];
+    uint8_t secret_key[OQS_KEM_ml_kem_768_length_secret_key];
+    uint8_t seed[64];
+
+    memcpy(seed, expanded, 64);
+    OQS_KEM_ml_kem_768_keypair_derand(public_key,secret_key, seed);
+
+    uint8_t sk_X[32];
+    uint8_t pk_X[32];
+    static const uint8_t x25519_base[32] = {9};
+
+    memcpy(sk_X, expanded+64, 32);
+    curve25519_donna(pk_X, sk_X, x25519_base);
+
+    memcpy(decapsulation_key, sk, 32);
+    memcpy(encapsulation_key, public_key, 1184);
+    memcpy(encapsulation_key+1184, pk_X , 32);
+}
+
+void eap_aka_prime_hpqc_xwing_decapsulate(uint8_t *shared_key, uint8_t *ct_xwing, uint8_t *sk_xwing){
+     // X-Wing 
+     uint8_t ct_M[1088];
+     uint8_t ct_X[32];
+     uint8_t ss_M[32];
+     uint8_t ss_X[32];
+
+     memcpy(ct_M,ct_xwing, 1088);
+     memcpy(ct_X,ct_xwing+1088, 32);
+
+     // Decapsulate key (sk)
+
+     uint8_t expanded[96];
+ 
+     OQS_SHA3_shake256(expanded, 96, sk_xwing, 32);
+ 
+     uint8_t pk_M[OQS_KEM_ml_kem_768_length_public_key];
+     uint8_t sk_M[OQS_KEM_ml_kem_768_length_secret_key];
+     uint8_t seed[64];
+ 
+     memcpy(seed, expanded, 64);
+     OQS_KEM_ml_kem_768_keypair_derand(pk_M,sk_M, seed);
+
+     uint8_t sk_X[32];
+     uint8_t pk_X[32];
+     static const uint8_t x25519_base[32] = {9};
+
+     memcpy(sk_X, expanded+64, 32);
+
+     curve25519_donna(pk_X, sk_X, x25519_base);
+
+     // we have sk_M, pk_M, sk_X, pk_X
+
+     OQS_KEM_ml_kem_768_decaps(ss_M, ct_M, sk_M);
+
+     curve25519_donna(ss_X, sk_X, ct_X);
+
+     // combiner 
+
+     uint8_t XWingLabel[6] = {
+         0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c
+     };
+
+     uint8_t combiner_output[134];
+     memcpy(combiner_output,ss_M, 32);
+     memcpy(combiner_output+32,ss_X, 32);
+     memcpy(combiner_output+64,ct_X, 32);
+     memcpy(combiner_output+96,pk_X, 32);
+     memcpy(combiner_output+128,XWingLabel, 6);
+
+     OQS_SHA3_sha3_256(shared_key,combiner_output,134);
+}
+
+void eap_aka_prime_generate_mk(uint8_t *ik_prime,uint8_t *ck_prime, char *input_supi, uint8_t *mk){
+
+    size_t key_len = 32;
+
+    uint8_t key_prf[key_len];
+    memcpy(key_prf, ik_prime, 16);
+    memcpy(key_prf+16, ck_prime, 16);
+
+    const char *prefix = "EAP-AKA'";
+    char *supi = ogs_id_get_value(input_supi);
+    size_t input_len = strlen(prefix) + strlen(supi);
+
+    uint8_t input[input_len];
+    size_t pos = 0;
+    size_t i;
+
+    for (i = 0; i < strlen(prefix); i++) {
+        input[pos] = (uint8_t)prefix[i];  
+        pos++;
+    }
+    
+    for (i = 0; i < strlen(supi); i++) {
+        input[pos] = (uint8_t)supi[i];  
+        pos++;
+    }
+    // output master key (MK) is 1664 bits = 208 bytes
+    size_t mk_len = 208; 
+
+    eap_prf_prime(key_prf, key_len, input, input_len, mk, mk_len);
+}
 
 
+void eap_aka_prime_generate_mk_shared(uint8_t *ik_prime,uint8_t *ck_prime,uint8_t *shared_key, char *input_supi, uint8_t *mk_shared){
+    size_t key_len = 64;
+
+    uint8_t key_prf[key_len];
+    memcpy(key_prf, ik_prime, 16);
+    memcpy(key_prf+16, ck_prime, 16);
+    memcpy(key_prf+32, shared_key, 32);
+
+    const char *prefix = "EAP-AKA' FS";
+    char *supi = ogs_id_get_value(input_supi);
+    size_t input_len = strlen(prefix) + strlen(supi);
+
+    uint8_t input[input_len];
+    size_t pos = 0;
+    size_t i;
+
+    for (i = 0; i < strlen(prefix); i++) {
+        input[pos] = (uint8_t)prefix[i];  
+        pos++;
+    }
+    
+    for (i = 0; i < strlen(supi); i++) {
+        input[pos] = (uint8_t)supi[i];  
+        pos++;
+    }
+    // output master key (MK) ECDHE/Shared is 1280 bits = 160 bytes
+    size_t mk_shared_len = 160; 
+
+    eap_prf_prime(key_prf, key_len, input, input_len, mk_shared, mk_shared_len);
+}
 

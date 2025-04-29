@@ -19,8 +19,6 @@
 
 #include "nudm-handler.h"
 #include "eap/eap.h"
-#include "oqs/oqs.h"
-#include "oqs/sha3.h"
 
 static const char *links_member_name(OpenAPI_auth_type_e auth_type)
 {
@@ -359,36 +357,10 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
         MK is 384 bits = 48 bytes 
         MK_HYBRID is 1280 = 160 bytes
     Key is IK' + CK'
-    */
+    */ 
+    uint8_t mk[208];
 
-    size_t key_len = OGS_KEY_LEN*2;
-
-    uint8_t key_prf[key_len];
-    memcpy(key_prf, ik_prime, OGS_KEY_LEN);
-    memcpy(key_prf+OGS_KEY_LEN, ck_prime, OGS_KEY_LEN);
-
-    const char *prefix = "EAP-AKA'";
-    char *supi = ogs_id_get_value(ausf_ue->supi);
-    size_t input_len = strlen(prefix) + strlen(supi);
-
-    uint8_t input[input_len];
-    size_t pos = 0;
-    size_t i;
-
-    for (i = 0; i < strlen(prefix); i++) {
-        input[pos] = (uint8_t)prefix[i];  
-        pos++;
-    }
-    
-    for (i = 0; i < strlen(supi); i++) {
-        input[pos] = (uint8_t)supi[i];  
-        pos++;
-    }
-    // output master key (MK) is 1664 bits = 208 bytes
-    size_t mk_len = 208; 
-    uint8_t mk[mk_len];
-
-    eap_prf_prime(key_prf, key_len, input, input_len, mk, mk_len);
+    eap_aka_prime_generate_mk(ausf_ue->ik_prime,ausf_ue->ck_prime, ausf_ue->supi,mk);
 
     memcpy(ausf_ue->k_aut,mk+16,OGS_SHA256_DIGEST_SIZE);
 
@@ -403,55 +375,24 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     if(EAP_AKA_PRIME_EXTENSION==1){
         // FS Extension 
         // Generate ECDHE public key pair
-        // generate private key
-        uint8_t priv_key_ecdhe[32];
-        
-        priv_key_ecdhe[0] &= 248;
-        priv_key_ecdhe[31] &= 127;
-        priv_key_ecdhe[31] |= 64;
 
-        static const uint8_t curve25519_basepoint[32] = {9};
-        
-        //uint8_t pub_key_ecdhe[32];
-        curve25519_donna(pub_key_ecdhe, priv_key_ecdhe, curve25519_basepoint);
+        uint8_t priv_key_ecdhe[32];
+        eap_aka_prime_fs_key_generation(priv_key_ecdhe,pub_key_ecdhe); 
         memcpy(ausf_ue->hnPrivateKey,priv_key_ecdhe,32);
 
     }
     else if(EAP_AKA_PRIME_EXTENSION==2){
         // Start X-WING Key Generation 
-        uint8_t expanded[96];
-        uint8_t sk[32];
-
-        // randomize sk
-        sk[0] &= 248;
-        sk[31] &= 127;
-        sk[31] |= 64;
-        
-        OQS_SHA3_shake256(expanded, 96, sk, 32);
-
-        uint8_t public_key[OQS_KEM_ml_kem_768_length_public_key];
-        uint8_t secret_key[OQS_KEM_ml_kem_768_length_secret_key];
-        uint8_t seed[64];
-
-        memcpy(seed, expanded, 64);
-        OQS_KEM_ml_kem_768_keypair_derand(public_key,secret_key, seed);
-
-        uint8_t sk_X[32];
-        uint8_t pk_X[32];
-        static const uint8_t x25519_base[32] = {9};
-
-        memcpy(sk_X, expanded+64, 32);
-        curve25519_donna(pk_X, sk_X, x25519_base);
 
         uint8_t decapsulation_key[32];
         //uint8_t encapsulation_key[1216];
 
-        memcpy(decapsulation_key, sk, 32);
-        memcpy(encapsulation_key, public_key, 1184);
-        memcpy(encapsulation_key+1184, pk_X , 32);
-
+        // input : none 
+        // output : decapsulation_key (sk)(32) and encapsulation_key (pk)(1216)
+        eap_aka_prime_hpqc_xwing_key_generation(decapsulation_key, encapsulation_key);
+        
         // save secret key x wing
-        memcpy(ausf_ue->sk_xwing,sk,32);
+        memcpy(ausf_ue->sk_xwing,decapsulation_key,32);
         // End of X-WING Key Generation 
     }
     
@@ -780,114 +721,29 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
 
         if(EAP_AKA_PRIME_EXTENSION == 1){
             // FS Extension 
-            //uint8_t shared_key[32];
-            curve25519_donna(shared_key, ausf_ue->hnPrivateKey, ausf_ue->uePublicKey);
-
+            // Input : HN Private Key, UE Public Key
+            // Output : Shared Key
+            eap_aka_prime_fs_generate_shared_key(shared_key,ausf_ue->hnPrivateKey,ausf_ue->uePublicKey); 
 
         }
         else if(EAP_AKA_PRIME_EXTENSION == 2){
             // HPQC Extension 
 
-             // X-Wing 
-            uint8_t ct_M[1088];
-            uint8_t ct_X[32];
-            uint8_t ss_M[32];
-            uint8_t ss_X[32];
-
-            memcpy(ct_M,ausf_ue->ct_xwing, 1088);
-            memcpy(ct_X,ausf_ue->ct_xwing+1088, 32);
-
-
-
-            // Decapsulate key (sk)
-            /*
-            def expandDecapsulationKey(sk):
-                expanded = SHAKE256(sk, 96)
-                (pk_M, sk_M) = ML-KEM-768.KeyGen_internal(expanded[0:32], expanded[32:64])
-                sk_X = expanded[64:96]
-                pk_X = X25519(sk_X, X25519_BASE)
-            */
-
-            uint8_t expanded[96];
-        
-            OQS_SHA3_shake256(expanded, 96, ausf_ue->sk_xwing, 32);
-        
-            uint8_t pk_M[OQS_KEM_ml_kem_768_length_public_key];
-            uint8_t sk_M[OQS_KEM_ml_kem_768_length_secret_key];
-            uint8_t seed[64];
-        
-        
-            memcpy(seed, expanded, 64);
-            OQS_KEM_ml_kem_768_keypair_derand(pk_M,sk_M, seed);
-
-            uint8_t sk_X[32];
-            uint8_t pk_X[32];
-            static const uint8_t x25519_base[32] = {9};
-
-            memcpy(sk_X, expanded+64, 32);
-
-            curve25519_donna(pk_X, sk_X, x25519_base);
-
-            // we have sk_M, pk_M, sk_X, pk_X
-
-            OQS_KEM_ml_kem_768_decaps(ss_M, ct_M, sk_M);
-
-            curve25519_donna(ss_X, sk_X, ct_X);
-
-            // combiner 
-
-            uint8_t XWingLabel[6] = {
-                0x5c, 0x2e, 0x2f, 0x2f, 0x5e, 0x5c
-            };
-
-            uint8_t combiner_output[134];
-            memcpy(combiner_output,ss_M, 32);
-            memcpy(combiner_output+32,ss_X, 32);
-            memcpy(combiner_output+64,ct_X, 32);
-            memcpy(combiner_output+96,pk_X, 32);
-            memcpy(combiner_output+128,XWingLabel, 6);
-
-            //uint8_t shared_key[32];
-
-            OQS_SHA3_sha3_256(shared_key,combiner_output,134);
-
-
+            // Input : X-Wing Ciphertext from UE, X-Wing shared key from HN
+            //          ausf_ue->ct_xwing, ausf_ue->sk_xwing
+            // Output : Shared Key
+            eap_aka_prime_hpqc_xwing_decapsulate(shared_key,ausf_ue->ct_xwing,ausf_ue->sk_xwing);
         }
 
         if(EAP_AKA_PRIME_EXTENSION == 1 || EAP_AKA_PRIME_EXTENSION == 2){
-            size_t key_len = 64;
-
-            uint8_t key_prf[key_len];
-            memcpy(key_prf, ausf_ue->ik_prime, 16);
-            memcpy(key_prf+16, ausf_ue->ck_prime, 16);
-            memcpy(key_prf+32, shared_key, 32);
-
-            // change prefix to use EAP-AKA'-FS
-            const char *prefix = "EAP-AKA' FS";
-            char *supi = ogs_id_get_value(ausf_ue->supi);
-            size_t input_len = strlen(prefix) + strlen(supi);
-
-            uint8_t input[input_len];
-            size_t pos = 0;
-            size_t i;
-
-            for (i = 0; i < strlen(prefix); i++) {
-                input[pos] = (uint8_t)prefix[i];  
-                pos++;
-            }
-            
-            for (i = 0; i < strlen(supi); i++) {
-                input[pos] = (uint8_t)supi[i];  
-                pos++;
-            }
-            // output master key (MK) ECDHE is 1280 bits = 160 bytes
-            size_t mk_ecdhe_len = 160; 
-            uint8_t mk_ecdhe[mk_ecdhe_len];
-
-            eap_prf_prime(key_prf, key_len, input, input_len, mk_ecdhe, mk_ecdhe_len);
+            // generate MK_ECDHE(FS) or MK_SHARED (HPQC)
+            // input: ik_prime, ck_prime, shared_key, prefix ("EAP-AKA' FS"), supi
+            // output: mk_ecdhe / mk_shared (64 bytes)
+            uint8_t mk_shared[160];
+            eap_aka_prime_generate_mk_shared(ausf_ue->ik_prime,ausf_ue->ck_prime,shared_key, ausf_ue->supi, mk_shared);
 
             // update K_AUSF
-            memcpy(ausf_ue->kausf,mk_ecdhe+96,32);
+            memcpy(ausf_ue->kausf,mk_shared+96,32);
         }
 
         ogs_kdf_kseaf(ausf_ue->serving_network_name,
