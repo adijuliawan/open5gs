@@ -132,6 +132,17 @@ size_t eap_aka_encode_attribute(EapAkaAttributeType eap_aka_attribute_type, cons
             memcpy(output + 4, input, 1216);
             return EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH;
             break;
+
+        case EAP_AKA_ATTRIBUTE_AT_PUB_KEM:
+            // MK_KEM : 1184 bytes + 2 + 1 = 1187 + 1 (padding) = 1188/4 = 299(length)
+            output[0] = EAP_AKA_ATTRIBUTE_AT_PUB_KEM;
+            size_t length_pub_kem = EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH/4;
+            eap_int_to_bytes_be((uint16_t)length_pub_kem, output + 1);
+
+            memset(output + 3, 0x00, 1);
+            memcpy(output + 4, input, 1184);
+            return EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH;
+            break;
         
         case EAP_AKA_ATTRIBUTE_AT_KDF_FS:
             output[0] = EAP_AKA_ATTRIBUTE_AT_KDF_FS;
@@ -194,6 +205,11 @@ size_t eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint
             //uint16_t len_units = 281;
             attr_total_len = 1124;
         }
+        else if(type==EAP_AKA_ATTRIBUTE_AT_KEM_CT){
+            //uint8_t len_units = input[i + 1];
+            //uint16_t len_units = 281;
+            attr_total_len = 1092;
+        }
         else{
             uint8_t len_units = input[i + 1];
             attr_total_len = len_units * 4;
@@ -225,6 +241,10 @@ size_t eap_aka_decode_attribute(EapAkaAttributeType eap_aka_attribute_type, uint
                     break;
                 case EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID:
                     value_len = 1120;
+                    value_ptr = input + i + 4;
+                    break;
+                case EAP_AKA_ATTRIBUTE_AT_KEM_CT:
+                    value_len = 1088;
                     value_ptr = input + i + 4;
                     break;
                 default:
@@ -262,6 +282,11 @@ void eap_aka_clean_mac(EapAkaAttributeType eap_aka_attribute_type ,uint8_t *inpu
             //uint8_t len_units = input[i + 1];
             //uint16_t len_units = 281;
             attr_total_len = 1124;
+        }
+        else if(type==EAP_AKA_ATTRIBUTE_AT_KEM_CT){
+            //uint8_t len_units = input[i + 1];
+            //uint16_t len_units = 281;
+            attr_total_len = 1092;
         }
         else{
             uint8_t len_units = input[i + 1];
@@ -469,6 +494,10 @@ void eap_aka_prime_hpqc_xwing_key_generation(uint8_t *decapsulation_key, uint8_t
     memcpy(encapsulation_key+1184, pk_X , 32);
 }
 
+void eap_aka_prime_pq_kem_key_generation(uint8_t *public_key_pq_kem,uint8_t *secret_key_pq_kem){
+    OQS_KEM_ml_kem_768_keypair(public_key_pq_kem, secret_key_pq_kem);
+}
+
 void eap_aka_prime_hpqc_xwing_decapsulate(uint8_t *shared_key, uint8_t *ct_xwing, uint8_t *sk_xwing){
      // X-Wing 
      uint8_t ct_M[1088];
@@ -520,6 +549,10 @@ void eap_aka_prime_hpqc_xwing_decapsulate(uint8_t *shared_key, uint8_t *ct_xwing
      memcpy(combiner_output+128,XWingLabel, 6);
 
      OQS_SHA3_sha3_256(shared_key,combiner_output,134);
+}
+
+void eap_aka_prime_pq_kem_decapsulate(uint8_t *shared_key, uint8_t *ct, uint8_t *sk){
+    OQS_KEM_ml_kem_768_decaps(shared_key, ct, sk);
 }
 
 void eap_aka_prime_generate_mk(uint8_t *ik_prime,uint8_t *ck_prime, char *input_supi, uint8_t *mk){
@@ -577,6 +610,42 @@ void eap_aka_prime_generate_mk_shared(uint8_t *ik_prime,uint8_t *ck_prime,uint8_
     
     for (i = 0; i < strlen(supi); i++) {
         input[pos] = (uint8_t)supi[i];  
+        pos++;
+    }
+    // output master key (MK) ECDHE/Shared is 1280 bits = 160 bytes
+    size_t mk_shared_len = 160; 
+
+    eap_prf_prime(key_prf, key_len, input, input_len, mk_shared, mk_shared_len);
+}
+
+void eap_aka_prime_generate_mk_pq_shared(uint8_t *ik_prime,uint8_t *ck_prime,uint8_t *shared_key, char *input_supi, uint8_t *input_ct, uint8_t *mk_shared){
+    size_t key_len = 64;
+
+    uint8_t key_prf[key_len];
+    memcpy(key_prf, ik_prime, 16);
+    memcpy(key_prf+16, ck_prime, 16);
+    memcpy(key_prf+32, shared_key, 32);
+
+    const char *prefix = "EAP-AKA' FS";
+    char *supi = ogs_id_get_value(input_supi);
+    size_t input_len = strlen(prefix) + strlen(supi) + 1088;
+
+    uint8_t input[input_len];
+    size_t pos = 0;
+    size_t i;
+
+    for (i = 0; i < strlen(prefix); i++) {
+        input[pos] = (uint8_t)prefix[i];  
+        pos++;
+    }
+    
+    for (i = 0; i < strlen(supi); i++) {
+        input[pos] = (uint8_t)supi[i];  
+        pos++;
+    }
+    
+    for (i = 0; i < 1088; i++) {
+        input[pos] = input_ct[i];  
         pos++;
     }
     // output master key (MK) ECDHE/Shared is 1280 bits = 160 bytes

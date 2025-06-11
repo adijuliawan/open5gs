@@ -82,19 +82,19 @@ bool udr_nudr_dr_handle_subscription_authentication(
             memset(&AuthenticationSubscription, 0,
                     sizeof(AuthenticationSubscription));
 
-//            AuthenticationSubscription.authentication_method =
-//                OpenAPI_auth_method_5G_AKA;
+           AuthenticationSubscription.authentication_method =
+               OpenAPI_auth_method_EAP_AKA_PRIME;
             //ogs_uint64_to_buffer(auth_info.auth_method, OGS_AUTH_METHOD_LEN, auth_method);
             //ogs_info("auth_method %ld",auth_info.auth_method);
             // TODO: make memory safe
-            if(auth_info.auth_method==2){
-                AuthenticationSubscription.authentication_method =
-                    OpenAPI_auth_method_EAP_AKA_PRIME;
-            }
-            else{
-                AuthenticationSubscription.authentication_method =
-                    OpenAPI_auth_method_5G_AKA;
-            }
+            // if(auth_info.auth_method==2){
+            //     AuthenticationSubscription.authentication_method =
+            //         OpenAPI_auth_method_EAP_AKA_PRIME;
+            // }
+            // else{
+            //     AuthenticationSubscription.authentication_method =
+            //         OpenAPI_auth_method_5G_AKA;
+            // }
 
             ogs_hex_to_ascii(auth_info.k, sizeof(auth_info.k),
                     k_string, sizeof(k_string));

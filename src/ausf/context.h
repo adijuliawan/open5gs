@@ -39,7 +39,9 @@ extern int __ausf_log_domain;
 // 0 : No Extension (EAP-AKA-PRIME)
 // 1 : With FS Extension (EAP-AKA-PRIME-FS)
 // 2 : With Hybrid PQC Extension (EAP-AKA-PRIME-HPQC)
-#define EAP_AKA_PRIME_EXTENSION  2
+// 3 : With PQC Extension (EAP-AKA PQ KEM)
+
+#define EAP_AKA_PRIME_EXTENSION  0
 
 typedef struct ausf_context_s {
     ogs_list_t      ausf_ue_list;
@@ -93,6 +95,8 @@ struct ausf_ue_s {
     uint8_t uePublicKey[OGS_SHA256_DIGEST_SIZE];
     uint8_t ct_xwing[1120];
     uint8_t sk_xwing[32];
+    uint8_t ct[1088];
+    uint8_t sk[2400];
 
 };
 

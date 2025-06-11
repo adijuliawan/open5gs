@@ -91,6 +91,7 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
     uint8_t at_mac[16];
     uint8_t at_pub_ecdhe[32];
     uint8_t at_pub_hybrid[1120];
+    uint8_t at_kem_ct[1088];
 
     /*
     RFC 9678 - Section 6.5.4 EAP-Response/AKA'-Challenge
@@ -112,6 +113,7 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
 
     size_t fs_extension_status = eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE, eap_response_decoded, eap_reponse_len, at_pub_ecdhe);
     size_t hpqc_extension_status = eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID, eap_response_decoded, eap_reponse_len, at_pub_hybrid);
+    size_t pq_kem_extension_status = eap_aka_decode_attribute(EAP_AKA_ATTRIBUTE_AT_KEM_CT, eap_response_decoded, eap_reponse_len, at_kem_ct);
 
     eap_aka_clean_mac(EAP_AKA_ATTRIBUTE_AT_MAC, eap_response_decoded, eap_reponse_len, eap_response_mac_input);    
 
@@ -128,9 +130,13 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
         ogs_error("AT_PUB_HYBRID not found in EAP Response");
         ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
     }
+    else if(EAP_AKA_PRIME_EXTENSION==3 && pq_kem_extension_status == 0){
+        ogs_error("AT_KEM_CT not found in EAP Response");
+        ausf_ue->auth_result = OpenAPI_auth_result_AUTHENTICATION_FAILURE;
+    }
     else{
         // now check AT_MAC and AT_RES 
-        if (memcmp(xmac, at_mac, OGS_SHA256_DIGEST_SIZE/2) != 0 ) {
+        if (memcmp(xmac, at_mac, OGS_SHA256_DIGEST_SIZE/2) != 0) {
             ogs_log_hexdump(OGS_LOG_WARN, xmac, OGS_SHA256_DIGEST_SIZE);
             ogs_log_hexdump(OGS_LOG_WARN, at_mac, OGS_SHA256_DIGEST_SIZE/2);
             ogs_error("MAC Failure!");
@@ -150,6 +156,9 @@ bool ausf_nausf_auth_handle_authenticate_eap_session(ausf_ue_t *ausf_ue,
             }
             else if(EAP_AKA_PRIME_EXTENSION==2){
                 memcpy(ausf_ue->ct_xwing,at_pub_hybrid,1120);
+            }
+            else if(EAP_AKA_PRIME_EXTENSION==3){
+                memcpy(ausf_ue->ct,at_kem_ct,1088);
             }
     
         }

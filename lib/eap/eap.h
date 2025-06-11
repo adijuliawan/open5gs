@@ -20,6 +20,8 @@ extern "C" {
 #define EAP_AKA_ATTRIBUTE_AT_KDF_FS_LENGTH                  4
 #define EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH               36
 #define EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH              1220
+#define EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH                 1188
+#define EAP_AKA_ATTRIBUTE_AT_KEM_CT_LENGTH                  1092
 
 #define EAP_SHA256_BLOCK_SIZE  ( 512 / 8)
 #define EAP_SHA256_DIGEST_SIZE ( 256 / 8)
@@ -154,7 +156,9 @@ typedef enum {
     EAP_AKA_ATTRIBUTE_AT_BIDDING                    = 136,
     EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE                  = 152,
     EAP_AKA_ATTRIBUTE_AT_KDF_FS                     = 153,
-    EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID                 = 154
+    EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID                 = 154,
+    EAP_AKA_ATTRIBUTE_AT_PUB_KEM                    = 155,
+    EAP_AKA_ATTRIBUTE_AT_KEM_CT                     = 156
 
 } EapAkaAttributeType;
 
@@ -270,6 +274,7 @@ void eap_hmac_sha256(const uint8_t *key, uint32_t key_size,
 
 void eap_aka_prime_generate_mk(uint8_t *ik_prime,uint8_t *ck_prime, char *input_supi, uint8_t *mk);
 void eap_aka_prime_generate_mk_shared(uint8_t *ik_prime,uint8_t *ck_prime,uint8_t *shared_key, char *input_supi, uint8_t *mk_shared);
+void eap_aka_prime_generate_mk_pq_shared(uint8_t *ik_prime,uint8_t *ck_prime,uint8_t *shared_key, char *input_supi, uint8_t *input_ct, uint8_t *mk_shared);
 
 // FS Extension
 void eap_aka_prime_fs_key_generation(uint8_t *priv_key_ecdhe, uint8_t *pub_key_ecdhe); 
@@ -278,6 +283,10 @@ void eap_aka_prime_fs_generate_shared_key(uint8_t *shared_key, uint8_t *priv_key
 // HPQC Extension
 void eap_aka_prime_hpqc_xwing_key_generation(uint8_t *decapsulation_key, uint8_t *encapsulation_key); 
 void eap_aka_prime_hpqc_xwing_decapsulate(uint8_t *shared_key, uint8_t *ct_xwing, uint8_t *sk_xwing); 
+
+//PQ KEM Extension
+void eap_aka_prime_pq_kem_key_generation(uint8_t *public_key_pq_kem,uint8_t *secret_key_pq_kem);
+void eap_aka_prime_pq_kem_decapsulate(uint8_t *shared_key, uint8_t *ct, uint8_t *sk);
 
 
 
