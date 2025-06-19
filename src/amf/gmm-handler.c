@@ -916,26 +916,14 @@ int gmm_handle_deregistration_request(amf_ue_t *amf_ue,
 int gmm_handle_authentication_response(amf_ue_t *amf_ue,
         ogs_nas_5gs_authentication_response_t *authentication_response)
 {
-    // ogs_nas_authentication_response_parameter_t
-    //     *authentication_response_parameter = NULL;
-    // uint8_t hxres_star[OGS_MAX_RES_LEN];
     int r;
 
     ogs_assert(amf_ue);
     ogs_assert(authentication_response);
-
-    // authentication_response_parameter = &authentication_response->
-    //             authentication_response_parameter;
-
+    
     ogs_debug("[%s] Authentication response", amf_ue->suci);
 
     CLEAR_AMF_UE_TIMER(amf_ue->t3560);
-
-    // if (authentication_response_parameter->length != OGS_MAX_RES_LEN) {
-    //     ogs_error("[%s] Invalid length [%d]",
-    //             amf_ue->suci, authentication_response_parameter->length);
-    //     return OGS_ERROR;
-    // }
 
     /* what type of authentication are we using? */
     if (amf_ue->auth_type == OpenAPI_auth_type_5G_AKA) {
