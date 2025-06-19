@@ -175,10 +175,6 @@ bool udm_nudr_dr_handle_subscription_authentication(
                 return false;
             }
 
-            //udm_ue->auth_type = OpenAPI_auth_type_5G_AKA;
-            //OpenAPI_auth_type_EAP_AKA_PRIME
-            //udm_ue->auth_type = AuthenticationSubscription->authentication_method;
-
             ogs_ascii_to_hex(
                 AuthenticationSubscription->enc_opc_key,
                 strlen(AuthenticationSubscription->enc_opc_key),

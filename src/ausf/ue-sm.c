@@ -94,18 +94,6 @@ void ausf_ue_state_operational(ogs_fsm_t *s, ausf_event_t *e)
         * However, now that we need to support also EAP-AKA', we need to check the
         * resource name to determine the action to take.
         */
-        /*
-        CASE(OGS_SBI_HTTP_METHOD_POST)
-            handled = ausf_nausf_auth_handle_authenticate(
-                    ausf_ue, stream, message);
-            if (!handled) {
-                ogs_error("[%s] Cannot handle SBI message",
-                        ausf_ue->suci);
-                OGS_FSM_TRAN(s, ausf_ue_state_exception);
-            }
-            break;
-        */
-        
         CASE(OGS_SBI_HTTP_METHOD_POST)
             SWITCH(message->h.resource.component[2])
             CASE(OGS_SBI_RESOURCE_NAME_EAP_SESSION)
