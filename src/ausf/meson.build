@@ -55,6 +55,6 @@ executable('open5gs-ausfd',
         '-DKMU_EAP_AKA_PRIME_EXTENSION=1'
     ],
     include_directories : srcinc,
-    dependencies : [libausf_dep, libeap_dep, libkmu_dep],
+    dependencies : [libausf_dep, libkmu_dep],
     install_rpath : libdir,
     install : true)

@@ -10,13 +10,13 @@ libkmu = static_library('kmu',
     sources : libkmu_sources,
     c_args : '-DKMU_COMPILATION',
     include_directories : [libkmu_inc,libinc],
-    install: true)
+    install: false)
 
 libkmu_dep = declare_dependency(
     link_with : libkmu,
     include_directories : [libkmu_inc,libinc],
     link_args: [
-        #'-L' + meson.current_source_dir(), '-lkmu',
+        '-L' + meson.current_source_dir(), '-lkmu',
         '-L' + meson.current_source_dir(), '-loqs'
     ],
 )  
