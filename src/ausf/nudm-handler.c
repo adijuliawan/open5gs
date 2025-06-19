@@ -18,7 +18,7 @@
  */
 
 #include "nudm-handler.h"
-#include "eap/eap.h"
+#include "kmu/kmu.h"
 
 static const char *links_member_name(OpenAPI_auth_type_e auth_type)
 {
@@ -347,152 +347,55 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     // copy ik prime and ck prime to ausf context 
     memcpy(ausf_ue->ik_prime,ik_prime,OGS_KEY_LEN);
     memcpy(ausf_ue->ck_prime,ck_prime,OGS_KEY_LEN);
-    /*
-    
-    For EAP-AKA', output is 1664 bits = 208 bytes 
-    For EAP-AKA'FS, there is 2 
-        MK is 384 bits = 48 bytes
-        MK_ECDHE is 1280 = 160 bytes 
-    For EAP-AKA'-HPQC
-        MK is 384 bits = 48 bytes 
-        MK_HYBRID is 1280 = 160 bytes
-    Key is IK' + CK'
-    */ 
+
+    // Master Key 
     uint8_t mk[208];
-
-    eap_aka_prime_generate_mk(ausf_ue->ik_prime,ausf_ue->ck_prime, ausf_ue->supi,mk);
-
+    kmu_eap_aka_prime_generate_mk(ausf_ue->ik_prime,ausf_ue->ck_prime, ausf_ue->supi,mk);
     memcpy(ausf_ue->k_aut,mk+16,OGS_SHA256_DIGEST_SIZE);
 
-    // need to calculate k_ausf after EAP Response, because in FS extension, this key
-    // derived from MK_ECDHE, and for HPQC it derived from MK_PQ_SHARED
+    // calculate temporary K_AUSF
     memcpy(ausf_ue->kausf,mk+144,OGS_SHA256_DIGEST_SIZE);
-
-    // For FS and HPQC Extension 
-    uint8_t pub_key_ecdhe[32]; // FS
-    uint8_t encapsulation_key[1216]; // HPQC
-    uint8_t public_key_pq_kem[1184]; // 1184 PQ-KEM OQS_KEM_ml_kem_768_length_public_key
+    
+    char *eap_request_payload = NULL;
 
     if(EAP_AKA_PRIME_EXTENSION==1){
-        // FS Extension 
-        // Generate ECDHE public key pair
-
+        // EAP-AKA' FS
+        // ECDHE Key generation
+        uint8_t pub_key_ecdhe[32]; 
         uint8_t priv_key_ecdhe[32];
-        eap_aka_prime_fs_key_generation(priv_key_ecdhe,pub_key_ecdhe); 
+        kmu_eap_aka_prime_fs_key_generation(priv_key_ecdhe,pub_key_ecdhe); 
         memcpy(ausf_ue->hnPrivateKey,priv_key_ecdhe,32);
+
+        eap_request_payload = kmu_eap_aka_prime_generate_eap_request_payload_fs(rand, autn, ausf_ue->k_aut, ausf_ue->serving_network_name, pub_key_ecdhe);
 
     }
     else if(EAP_AKA_PRIME_EXTENSION==2){
-        // Start X-WING Key Generation 
-
+        // EAP-AKA' HPQC 
+        // X-Wing Key generation
+        uint8_t encapsulation_key[1216]; 
         uint8_t decapsulation_key[32];
-        //uint8_t encapsulation_key[1216];
 
-        // input : none 
-        // output : decapsulation_key (sk)(32) and encapsulation_key (pk)(1216)
-        eap_aka_prime_hpqc_xwing_key_generation(decapsulation_key, encapsulation_key);
-        
-        // save secret key x wing
+        kmu_eap_aka_prime_hpqc_xwing_key_generation(decapsulation_key, encapsulation_key);
         memcpy(ausf_ue->sk_xwing,decapsulation_key,32);
-        // End of X-WING Key Generation 
+
+        eap_request_payload = kmu_eap_aka_prime_generate_eap_request_payload_hpqc(rand, autn, ausf_ue->k_aut, ausf_ue->serving_network_name, encapsulation_key);
+
     }
     else if(EAP_AKA_PRIME_EXTENSION==3){
-        // ML-KEM
-        uint8_t secret_key_pq_kem[2400]; // 2400 OQS_KEM_ml_kem_768_length_secret_key
-        eap_aka_prime_pq_kem_key_generation(public_key_pq_kem, secret_key_pq_kem);
+        // EAP-AKA' PQ KEM
+        // ML-KEM Key generation
+        uint8_t public_key_pq_kem[1184]; 
+        uint8_t secret_key_pq_kem[2400];  
+
+        kmu_eap_aka_prime_pq_kem_key_generation(public_key_pq_kem, secret_key_pq_kem);
         memcpy(ausf_ue->sk,secret_key_pq_kem,2400);
 
+        eap_request_payload = kmu_eap_aka_prime_generate_eap_request_payload_pq_kem(rand, autn, ausf_ue->k_aut, ausf_ue->serving_network_name, public_key_pq_kem);
+        
     }
-    
-    /* Generate EAP Request Payload
-     * rand, autn, kdf, kdf_input, mac
-     */
-
-    uint8_t data_attribute[OGS_MAX_EAP_PAYLOAD_LEN];
-
-    uint8_t at_rand[EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH]; // 20
-    uint8_t at_autn[EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH]; // 20
-    uint8_t at_kdf[EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH]; // 4
-    uint8_t at_mac[EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH]; // 20
-    size_t at_kdf_input_length = ((strlen(ausf_ue->serving_network_name) + 3)/4 + 1)*4; //36
-    uint8_t at_kdf_input[at_kdf_input_length]; 
-
-    // encode and append all attribute 
-    size_t offset = 0;
-    // AT_RAND
-    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_RAND, rand, OGS_RAND_LEN, at_rand);
-    memcpy(data_attribute + offset, at_rand, EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH);
-    offset+=EAP_AKA_ATTRIBUTE_AT_RAND_LENGTH;
-    
-    // AT_AUTN
-    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_AUTN, autn, OGS_AUTN_LEN, at_autn);
-    memcpy(data_attribute + offset, at_autn, EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH);
-    offset+=EAP_AKA_ATTRIBUTE_AT_AUTN_LENGTH;
-    
-    // AT_KDF
-    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF, NULL, 0, at_kdf);
-    memcpy(data_attribute + offset, at_kdf, EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH);
-    offset+=EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH;
-
-    // AT_KDF_FS
-    if(EAP_AKA_PRIME_EXTENSION==1 || EAP_AKA_PRIME_EXTENSION==2 || EAP_AKA_PRIME_EXTENSION==3){
-        uint8_t at_kdf_fs[EAP_AKA_ATTRIBUTE_AT_KDF_LENGTH]; // 4
-        eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF_FS, NULL, 0, at_kdf_fs);
-        memcpy(data_attribute + offset, at_kdf_fs, EAP_AKA_ATTRIBUTE_AT_KDF_FS_LENGTH);
-        offset+=EAP_AKA_ATTRIBUTE_AT_KDF_FS_LENGTH;
+    else{
+        eap_request_payload = kmu_eap_aka_prime_generate_eap_request_payload(rand, autn, ausf_ue->k_aut, ausf_ue->serving_network_name);
     }
-    
-    // AT_KDF_INPUT
-    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_KDF_INPUT, ausf_ue->serving_network_name, strlen(ausf_ue->serving_network_name), at_kdf_input);
-    memcpy(data_attribute + offset, at_kdf_input, at_kdf_input_length);
-    offset+=at_kdf_input_length;
-
-    // FS Extension
-    if(EAP_AKA_PRIME_EXTENSION==1){
-        uint8_t at_pub_ecdhe[EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH];
-        eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE, pub_key_ecdhe, 32, at_pub_ecdhe);
-        memcpy(data_attribute + offset, at_pub_ecdhe, EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH);
-        offset+=EAP_AKA_ATTRIBUTE_AT_PUB_ECDHE_LENGTH;
-    }
-    // HPQC Extension
-    if(EAP_AKA_PRIME_EXTENSION==2){
-        uint8_t at_pub_hybrid[EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH]; // 1220
-        eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID, encapsulation_key, 1216, at_pub_hybrid);
-        memcpy(data_attribute + offset, at_pub_hybrid, EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH);
-        offset+=EAP_AKA_ATTRIBUTE_AT_PUB_HYBRID_LENGTH;
-    }
-    // PQ KEM Extension
-    if(EAP_AKA_PRIME_EXTENSION==3){
-       uint8_t at_pub_kem[EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH]; // 1188
-       eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_PUB_KEM, public_key_pq_kem, 1184, at_pub_kem);
-       memcpy(data_attribute + offset, at_pub_kem, EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH);
-       offset+=EAP_AKA_ATTRIBUTE_AT_PUB_KEM_LENGTH;
-    }
-
-    // AT_MAC
-    eap_aka_encode_attribute(EAP_AKA_ATTRIBUTE_AT_MAC, NULL, OGS_RAND_LEN, at_mac);
-    memcpy(data_attribute + offset, at_mac, EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH);
-    offset+=EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH;
-    
-    // create eap_request 
-    size_t eap_request_length = sizeof(eap_aka_packet_t) + offset;
-    eap_aka_packet_t *eap_request_packet = malloc(eap_request_length);
-
-    uint8_t eap_request[eap_request_length];
-    
-    eap_aka_build_request(eap_request_packet, EAP_AKA_SUBTYPE_AKA_CHALLENGE, offset, data_attribute);
-    eap_aka_encode_packet(eap_request_packet, eap_request);
-
-    //mac calculation 
-    ogs_hmac_sha256(ausf_ue->k_aut, OGS_SHA256_DIGEST_SIZE, eap_request, eap_request_length, at_mac+4, OGS_SHA256_DIGEST_SIZE);
-
-    //copy back at_mac
-    memcpy(eap_request + (eap_request_length - EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH), at_mac, EAP_AKA_ATTRIBUTE_AT_MAC_LENGTH);
-
-    char eap_request_base64[((eap_request_length + 2) / 3) * 4 + 1];
-    ogs_base64_encode_binary(eap_request_base64, eap_request, eap_request_length);
-
-    // End of EAP Payload Generation
 
     memset(&UeAuthenticationCtx, 0, sizeof(UeAuthenticationCtx));
 
@@ -501,7 +404,7 @@ static bool ausf_nudm_ueau_handle_get_eap_aka_prime(ausf_ue_t *ausf_ue,
     memset(&AuthData, 0, sizeof(AuthData));
     
     AuthData.is_eap_payload = true;
-    AuthData.eap_payload.eap_payload = eap_request_base64;
+    AuthData.eap_payload.eap_payload = eap_request_payload;
 
     UeAuthenticationCtx._5g_auth_data = &AuthData;
 
@@ -728,49 +631,34 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         EapSession.auth_result = ausf_ue->auth_result;
         EapSession.supi = ausf_ue->supi; 
 
-        // check which extension is used 
-        // Normal EAP-AKA' 
-        // EAP-AKA'-FS
-        // EAP-AKA'-HPQC
+        // Derived shared session key for EAP-AKA' extension after successful authentication
         uint8_t shared_key[32];
 
         if(EAP_AKA_PRIME_EXTENSION == 1){
             // FS Extension 
-            // Input : HN Private Key, UE Public Key
-            // Output : Shared Key
-            eap_aka_prime_fs_generate_shared_key(shared_key,ausf_ue->hnPrivateKey,ausf_ue->uePublicKey); 
-
+            kmu_eap_aka_prime_fs_generate_shared_key(shared_key,ausf_ue->hnPrivateKey,ausf_ue->uePublicKey); 
+            uint8_t mk_shared[160];
+            kmu_eap_aka_prime_generate_mk_shared(ausf_ue->ik_prime,ausf_ue->ck_prime,shared_key, ausf_ue->supi, mk_shared);
+            // update K_AUSF from MK_SHARED
+            memcpy(ausf_ue->kausf,mk_shared+96,32);
         }
         else if(EAP_AKA_PRIME_EXTENSION == 2){
             // HPQC Extension 
-
-            // Input : X-Wing Ciphertext from UE, X-Wing shared key from HN
-            //          ausf_ue->ct_xwing, ausf_ue->sk_xwing
-            // Output : Shared Key
-            eap_aka_prime_hpqc_xwing_decapsulate(shared_key,ausf_ue->ct_xwing,ausf_ue->sk_xwing);
-        }
-        else if(EAP_AKA_PRIME_EXTENSION == 3){
-            // PQ KEM        
-
-            eap_aka_prime_pq_kem_decapsulate(shared_key, ausf_ue->ct, ausf_ue->sk);
-
-        }
-
-        if(EAP_AKA_PRIME_EXTENSION == 1 || EAP_AKA_PRIME_EXTENSION == 2 || EAP_AKA_PRIME_EXTENSION == 3){
-            // generate MK_ECDHE(FS) or MK_SHARED (HPQC)
-            // input: ik_prime, ck_prime, shared_key, prefix ("EAP-AKA' FS"), supi
-            // output: mk_ecdhe / mk_shared (64 bytes)
+            kmu_eap_aka_prime_hpqc_xwing_decapsulate(shared_key,ausf_ue->ct_xwing,ausf_ue->sk_xwing);
             uint8_t mk_shared[160];
-            if(EAP_AKA_PRIME_EXTENSION == 1 || EAP_AKA_PRIME_EXTENSION == 2){
-                eap_aka_prime_generate_mk_shared(ausf_ue->ik_prime,ausf_ue->ck_prime,shared_key, ausf_ue->supi, mk_shared);
-            }
-            else{
-                eap_aka_prime_generate_mk_pq_shared(ausf_ue->ik_prime,ausf_ue->ck_prime,shared_key, ausf_ue->supi, ausf_ue->ct, mk_shared);
-            }
-            // update K_AUSF
+            kmu_eap_aka_prime_generate_mk_shared(ausf_ue->ik_prime,ausf_ue->ck_prime,shared_key, ausf_ue->supi, mk_shared);
+            // update K_AUSF from MK_SHARED
             memcpy(ausf_ue->kausf,mk_shared+96,32);
         }
-        
+        else if(EAP_AKA_PRIME_EXTENSION == 3){
+            // PQ KEM Extension       
+            kmu_eap_aka_prime_pq_kem_decapsulate(shared_key, ausf_ue->ct, ausf_ue->sk);
+            uint8_t mk_shared[160];
+            kmu_eap_aka_prime_generate_mk_pq_shared(ausf_ue->ik_prime,ausf_ue->ck_prime,shared_key, ausf_ue->supi, ausf_ue->ct, mk_shared);
+            // update K_AUSF from MK_SHARED
+            memcpy(ausf_ue->kausf,mk_shared+96,32);
+        }
+
 
         ogs_kdf_kseaf(ausf_ue->serving_network_name,
             ausf_ue->kausf, ausf_ue->kseaf);
@@ -779,17 +667,10 @@ bool ausf_nudm_ueau_handle_result_confirmation_inform(ausf_ue_t *ausf_ue,
         EapSession.k_seaf = kseaf_string;
 
         
-        // create eap_sucess_packet
-        size_t eap_success_packet_length = 4;
-        uint8_t eap_success[eap_success_packet_length];
-        char *eap_response_base64 = malloc(((eap_success_packet_length + 2) / 3) * 4 + 1);
-        eap_aka_packet_t *eap_response_packet = malloc(eap_success_packet_length);
 
-        eap_aka_build_success(eap_response_packet);
-        eap_aka_encode_packet(eap_response_packet,eap_success);
-        ogs_base64_encode_binary(eap_response_base64, eap_success, eap_success_packet_length);
-
-        EapSession.eap_payload = eap_response_base64;
+        char *eap_response_payload = NULL;
+        eap_response_payload = kmu_eap_aka_prime_generate_eap_success_payload();
+        EapSession.eap_payload = eap_response_payload;
 
         memset(&sendmsg, 0, sizeof(sendmsg));
     

@@ -50,8 +50,11 @@ ausf_sources = files('''
 
 executable('open5gs-ausfd',
     sources : ausf_sources,
-    c_args : '-DDEFAULT_CONFIG_FILENAME="@0@/ausf.yaml"'.format(open5gs_sysconfdir),
+    c_args : [
+        '-DDEFAULT_CONFIG_FILENAME="@0@/ausf.yaml"'.format(open5gs_sysconfdir),
+        '-DKMU_EAP_AKA_PRIME_EXTENSION=1'
+    ],
     include_directories : srcinc,
-    dependencies : [libausf_dep, libeap_dep],
+    dependencies : [libausf_dep, libeap_dep, libkmu_dep],
     install_rpath : libdir,
     install : true)

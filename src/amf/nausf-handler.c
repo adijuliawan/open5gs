@@ -48,16 +48,6 @@ static int amf_nausf_auth_handle_authenticate_5g_aka(
     UeAuthenticationCtx = message->UeAuthenticationCtx;
     ogs_assert(UeAuthenticationCtx);
     ogs_assert(UeAuthenticationCtx->auth_type == OpenAPI_auth_type_5G_AKA);
-    // if (!UeAuthenticationCtx) {
-    //     ogs_error("[%s] No UeAuthenticationCtx", amf_ue->suci);
-    //     return OGS_ERROR;
-    // }
-
-    // if (UeAuthenticationCtx->auth_type != OpenAPI_auth_type_5G_AKA) {
-    //     ogs_error("[%s] Not supported Auth Method [%d]",
-    //         amf_ue->suci, UeAuthenticationCtx->auth_type);
-    //     return OGS_ERROR;
-    // }
 
     AuthData = UeAuthenticationCtx->_5g_auth_data;
     if (!AuthData) {
@@ -192,16 +182,7 @@ static int amf_nausf_auth_handle_authenticate_eap_aka_prime(
     }
 
     UeAuthenticationCtx = message->UeAuthenticationCtx;
-    // if (!UeAuthenticationCtx) {
-    //     ogs_error("[%s] No UeAuthenticationCtx", amf_ue->suci);
-    //     return OGS_ERROR;
-    // }
 
-    // if (UeAuthenticationCtx->auth_type != OpenAPI_auth_type_EAP_AKA_PRIME) {
-    //     ogs_error("[%s] Not supported Auth Method [%d]",
-    //         amf_ue->suci, UeAuthenticationCtx->auth_type);
-    //     return OGS_ERROR;
-    // }
     ogs_assert(UeAuthenticationCtx);
     ogs_assert(UeAuthenticationCtx->auth_type == OpenAPI_auth_type_EAP_AKA_PRIME);
 
@@ -227,7 +208,6 @@ static int amf_nausf_auth_handle_authenticate_eap_aka_prime(
         ogs_error("[%s] No _links", amf_ue->suci);
         return OGS_ERROR;
     }
-        
 
     OpenAPI_list_for_each(UeAuthenticationCtx->_links, node) {
         LinksValueScheme = node->data;
@@ -285,8 +265,7 @@ static int amf_nausf_auth_handle_authenticate_eap_aka_prime(
     
     // AMF only forward eap payload from AUSF to UE
     size_t payload_len = strlen(AuthData->eap_payload.eap_payload);
-    ogs_debug("[EAP_AKA_PRIME][HPQC] EAP payload from AuthData %ld", payload_len);
-    ogs_debug("[EAP_AKA_PRIME][HPQC] EAP payload AMF_UE %ld", sizeof(amf_ue->eap_payload));
+
     if (payload_len > sizeof(amf_ue->eap_payload)) {
         ogs_error("[%s] EAP payload too long", amf_ue->suci);
         return OGS_ERROR;

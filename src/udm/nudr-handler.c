@@ -19,6 +19,7 @@
 
 #include "nudr-handler.h"
 #include "sbi-path.h"
+#include "kmu/kmu.h"
 
 bool udm_nudr_dr_handle_subscription_authentication(
     udm_ue_t *udm_ue, ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
@@ -320,7 +321,6 @@ bool udm_nudr_dr_handle_subscription_authentication(
                 ogs_hex_to_ascii(ik_prime, sizeof(ik_prime),
                         ik_prime_string, sizeof(ik_prime_string));
                 AuthenticationVector.ik_prime = ik_prime_string;
-                
                 
                 AuthenticationInfoResult.authentication_vector =
                     &AuthenticationVector;

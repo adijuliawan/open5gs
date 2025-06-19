@@ -41,7 +41,7 @@ extern int __ausf_log_domain;
 // 2 : With Hybrid PQC Extension (EAP-AKA-PRIME-HPQC)
 // 3 : With PQC Extension (EAP-AKA PQ KEM)
 
-#define EAP_AKA_PRIME_EXTENSION  0
+#define EAP_AKA_PRIME_EXTENSION 1
 
 typedef struct ausf_context_s {
     ogs_list_t      ausf_ue_list;
@@ -87,14 +87,18 @@ struct ausf_ue_s {
     uint8_t hxres_star[OGS_MAX_RES_LEN];
     uint8_t kausf[OGS_SHA256_DIGEST_SIZE];
     uint8_t kseaf[OGS_SHA256_DIGEST_SIZE];
-    uint8_t xres[OGS_MAX_RES_LEN]; // For EAP-AKA-PRIME
+    // EAP-AKA-PRIME
+    uint8_t xres[OGS_MAX_RES_LEN]; 
     uint8_t k_aut[OGS_SHA256_DIGEST_SIZE];
     uint8_t ik_prime[OGS_KEY_LEN];
     uint8_t ck_prime[OGS_KEY_LEN];
+    // FS extension
     uint8_t hnPrivateKey[OGS_SHA256_DIGEST_SIZE];
     uint8_t uePublicKey[OGS_SHA256_DIGEST_SIZE];
+    // HPQC extension (X-Wing)
     uint8_t ct_xwing[1120];
     uint8_t sk_xwing[32];
+    // PQ KEM extension (ML-KEM)
     uint8_t ct[1088];
     uint8_t sk[2400];
 
