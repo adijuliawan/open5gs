@@ -132,6 +132,8 @@ static int amf_nausf_auth_handle_authenticate_5g_aka(
 
     STORE_5G_AKA_CONFIRMATION(amf_ue, LinksValueSchemeValue->href);
 
+     amf_ue->auth_type = OpenAPI_auth_type_5G_AKA;
+
     ogs_ascii_to_hex(AuthData->av_5g_aka.rand, strlen(AuthData->av_5g_aka.rand),
         amf_ue->rand, sizeof(amf_ue->rand));
     ogs_ascii_to_hex(AuthData->av_5g_aka.hxres_star, strlen(AuthData->av_5g_aka.hxres_star),
