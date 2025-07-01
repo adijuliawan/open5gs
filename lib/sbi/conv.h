@@ -35,6 +35,8 @@ typedef struct ogs_sbi_header_s ogs_sbi_header_t;
 char *ogs_supi_from_suci(char *suci);
 char *ogs_supi_from_supi_or_suci(char *supi_or_suci);
 
+void *ogs_eph_pub_key_from_suci(char *suci, uint8_t *eph_pub_key);
+
 char *ogs_uridup(
         OpenAPI_uri_scheme_e scheme,
         char *fqdn, ogs_sockaddr_t *addr, ogs_sockaddr_t *addr6, uint16_t port,

@@ -41,7 +41,10 @@ extern int __ausf_log_domain;
 // 2 : With Hybrid PQC Extension (EAP-AKA-PRIME-HPQC)
 // 3 : With PQC Extension (EAP-AKA PQ KEM)
 
-#define EAP_AKA_PRIME_EXTENSION 2
+#define EAP_AKA_PRIME_EXTENSION 0
+
+#define AKA_FS_EXTENSION 1
+
 
 typedef struct ausf_context_s {
     ogs_list_t      ausf_ue_list;

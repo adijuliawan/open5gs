@@ -114,6 +114,37 @@ void ogs_kdf_kausf(
             FC_FOR_KAUSF_DERIVATION, param, kausf);
 }
 
+/* TS33.501 Annex A.2 : Kausf derviation function - FS edition*/
+void ogs_kdf_kausf_fs(
+        uint8_t *ck, uint8_t *ik,
+        char *serving_network_name, uint8_t *autn, uint8_t *dhk,
+        uint8_t *kausf)
+{
+    kdf_param_t param;
+    uint8_t key[OGS_KEY_LEN*2];
+
+    ogs_assert(ck);
+    ogs_assert(ik);
+    ogs_assert(serving_network_name);
+    ogs_assert(autn);
+    ogs_assert(dhk);
+    ogs_assert(kausf);
+
+    memcpy(key, ck, OGS_KEY_LEN);
+    memcpy(key+OGS_KEY_LEN, ik, OGS_KEY_LEN);
+
+    memset(param, 0, sizeof(param));
+    param[0].buf = (uint8_t *)serving_network_name;
+    param[0].len = strlen(serving_network_name);
+    param[1].buf = autn;
+    param[1].len = OGS_SQN_XOR_AK_LEN;
+    param[2].buf = dhk;
+    param[2].len = OGS_RAND_LEN;
+
+    ogs_kdf_common(key, OGS_KEY_LEN*2,
+            FC_FOR_KAUSF_DERIVATION, param, kausf);
+}
+
 /* TS33.501 Annex A.3 : CK' and IK' derivation function */
 void ogs_kdf_ck_prime_ik_prime(
     uint8_t *ck, uint8_t *ik,

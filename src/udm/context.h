@@ -66,7 +66,10 @@ struct udm_ue_s {
     uint8_t opc[OGS_KEY_LEN];
     uint8_t amf[OGS_AMF_LEN];
     uint8_t rand[OGS_RAND_LEN];
+    uint8_t rand32[OGS_RAND_LEN*2];
     uint8_t sqn[OGS_SQN_LEN];
+
+    uint8_t eph_pub_key[32];
 
     ogs_guami_t guami;
 

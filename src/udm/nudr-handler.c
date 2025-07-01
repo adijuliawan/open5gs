@@ -212,6 +212,35 @@ bool udm_nudr_dr_handle_subscription_authentication(
             // Start AV generation 
             // 5G-AKA
             if(AuthenticationSubscription->authentication_method == OpenAPI_auth_method_5G_AKA ){
+                // 5G_AKA_FS extension
+                ogs_debug("5G-AKA-FS Authentication Vector generation");
+                /*
+                1. Generate an ephemeral private-public key pair (y,Y) such that Y = y · G
+                2. Compute a Diffie–Hellman key DHK = y · C0   ( C0 from udm_ue->eph_pub_key)
+                3. Set RAND ← Y as a challenge
+                4. milenage_generate 
+                5. 
+                */
+
+                // generate ECDHE key pair 
+                uint8_t sk_y[32];
+                uint8_t pk_Y[32];
+                static const uint8_t x25519_base[32] = {9};
+                curve25519_donna(pk_Y, sk_y, x25519_base);
+                
+                // calculate DHK 
+                uint8_t dhk[32];
+                curve25519_donna(dhk, sk_y, udm_ue->eph_pub_key);
+
+                //print dhk
+                char dhk_string[OGS_KEYSTRLEN(32)];
+                
+                ogs_hex_to_ascii(dhk, sizeof(dhk),
+                                    dhk_string, sizeof(dhk_string));
+                ogs_debug("[5G-AKA-FS][DHK] [%s]",dhk_string);
+
+
+                
                 udm_ue->auth_type = OpenAPI_auth_type_5G_AKA;
             
                 memset(&AuthenticationInfoResult,
@@ -220,7 +249,18 @@ bool udm_nudr_dr_handle_subscription_authentication(
                 AuthenticationInfoResult.supi = udm_ue->supi;
                 AuthenticationInfoResult.auth_type = udm_ue->auth_type;
 
-                ogs_random(udm_ue->rand, OGS_RAND_LEN);
+                //ogs_random(udm_ue->rand, OGS_RAND_LEN);
+                memcpy(udm_ue->rand, pk_Y, OGS_RAND_LEN);
+
+                // RAND XOR DHK
+                uint8_t rand_xor_dhk[16];
+                int i;
+                for (i = 0; i < 16; i++)
+                    rand_xor_dhk[i] = udm_ue->rand[i] ^ dhk[i];
+
+
+
+                
                 #if 0
                             OGS_HEX(tmp[step], strlen(tmp[step]), udm_ue->rand);
                 #if 0
@@ -229,15 +269,17 @@ bool udm_nudr_dr_handle_subscription_authentication(
                 #endif
                 #endif
 
+                // milenage_generate(udm_ue->opc, udm_ue->amf, udm_ue->k, udm_ue->sqn,
+                //         udm_ue->rand, autn, ik, ck, ak, xres, &xres_len);
                 milenage_generate(udm_ue->opc, udm_ue->amf, udm_ue->k, udm_ue->sqn,
-                        udm_ue->rand, autn, ik, ck, ak, xres, &xres_len);
+                       rand_xor_dhk, autn, ik, ck, ak, xres, &xres_len);
 
                 ogs_assert(udm_ue->serving_network_name);
 
                 /* TS33.501 Annex A.2 : Kausf derviation function */
-                ogs_kdf_kausf(
+                ogs_kdf_kausf_fs(
                         ck, ik,
-                        udm_ue->serving_network_name, autn,
+                        udm_ue->serving_network_name, autn, dhk,
                         kausf);
 
                 /* TS33.501 Annex A.4 : RES* and XRES* derivation function */

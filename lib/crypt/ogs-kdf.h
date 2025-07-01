@@ -33,6 +33,11 @@ void ogs_kdf_kausf(
         uint8_t *ck, uint8_t *ik,
         char *serving_network_name, uint8_t *autn,
         uint8_t *kausf);
+
+void ogs_kdf_kausf_fs(
+        uint8_t *ck, uint8_t *ik,
+        char *serving_network_name, uint8_t *autn, uint8_t *dhk,
+        uint8_t *kausf);
         
 /* TS33.501 Annex A.3 : CK' and IK' derivation function */
 void ogs_kdf_ck_prime_ik_prime(

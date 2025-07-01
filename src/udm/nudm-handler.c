@@ -24,6 +24,11 @@
 bool udm_nudm_ueau_handle_get(
     udm_ue_t *udm_ue, ogs_sbi_stream_t *stream, ogs_sbi_message_t *recvmsg)
 {
+    //
+    ogs_debug("SUCI [%s]",udm_ue->suci);
+    ogs_debug("SUPI [%s]",udm_ue->supi);
+    
+    // still encrypted
     OpenAPI_authentication_info_request_t *AuthenticationInfoRequest = NULL;
     OpenAPI_resynchronization_info_t *ResynchronizationInfo = NULL;
     int r;

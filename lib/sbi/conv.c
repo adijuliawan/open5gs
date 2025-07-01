@@ -168,6 +168,7 @@ char *ogs_supi_from_suci(char *suci)
                         curve25519_donna(z,
                             ogs_sbi_self()->hnet[home_network_pki_value].key,
                             pubkey.data);
+                        
                     } else if (protection_scheme_id ==
                             OGS_PROTECTION_SCHEME_PROFILE_B) {
                         if (ecdh_shared_secret(
@@ -246,6 +247,108 @@ cleanup:
 
     ogs_free(tmp);
     return supi;
+}
+
+void *ogs_eph_pub_key_from_suci(char *suci, uint8_t *eph_pub_key){
+    char *array[MAX_SUCI_TOKEN];
+    char *p, *tmp;
+    int i;
+
+    ogs_assert(suci);
+    tmp = ogs_strdup(suci);
+    if (!tmp) {
+        ogs_error("ogs_strdup() failed");
+        return NULL;
+    }
+
+    /* Clang scan-build SA: Branch condition evaluates to a garbage value: If array "array" is not fully populated
+     * in the while loop below then later access in the following switch-case may check uninitialized values.
+     * Initialize "array" to NULL pointers to fix the issue. */
+    for (i = 0; i < MAX_SUCI_TOKEN; i++) {
+        array[i] = NULL;
+    }
+
+    p = tmp;
+    i = 0;
+    while((i < MAX_SUCI_TOKEN) && (array[i++] = strsep(&p, "-"))) {
+        /* Empty Body */
+    }
+
+    SWITCH(array[0])
+    CASE("suci")
+        SWITCH(array[1])
+        CASE("0")   /* SUPI format : IMSI */
+            if (array[2] && array[3] && array[5] && array[6] && array[7]) {
+                uint8_t protection_scheme_id = atoi(array[5]);
+                uint8_t home_network_pki_value = atoi(array[6]);
+
+                if (protection_scheme_id == OGS_PROTECTION_SCHEME_PROFILE_A) {
+
+                    ogs_datum_t pubkey;
+                    ogs_datum_t cipher_text;
+
+
+                    uint8_t mactag1[OGS_MACTAG_LEN];
+
+                    uint8_t z[OGS_ECCKEY_LEN];
+
+                    if (home_network_pki_value <
+                            OGS_HOME_NETWORK_PKI_VALUE_MIN ||
+                        home_network_pki_value >
+                            OGS_HOME_NETWORK_PKI_VALUE_MAX) {
+                        ogs_error("Invalid HNET PKI Value [%s]", array[6]);
+                        break;
+                    }
+
+                    if (!ogs_sbi_self()->hnet[home_network_pki_value].avail) {
+                        ogs_error("HNET PKI Value Not Avaiable [%s]", array[6]);
+                        break;
+                    }
+
+                    if (ogs_sbi_self()->hnet[home_network_pki_value].scheme
+                            != protection_scheme_id) {
+                        ogs_error("Scheme Not Matched [%d != %s]",
+                            ogs_sbi_self()->hnet[protection_scheme_id].scheme,
+                            array[5]);
+                        break;
+                    }
+
+                    if (parse_scheme_output(
+                            array[5], array[7],
+                            &pubkey, &cipher_text, mactag1) != OGS_OK) {
+                        ogs_error("parse_scheme_output[%s] failed", array[7]);
+                        break;
+                    }
+
+                    if (protection_scheme_id ==
+                            OGS_PROTECTION_SCHEME_PROFILE_A) {
+                        curve25519_donna(z,
+                            ogs_sbi_self()->hnet[home_network_pki_value].key,
+                            pubkey.data);
+                    }
+                    ogs_log_hexdump(OGS_LOG_INFO, pubkey.data, OGS_ECCKEY_LEN);
+                    memcpy(eph_pub_key, pubkey.data , 32);
+
+                } else {
+                    ogs_error("Invalid Protection Scheme [%s]", array[5]);
+                }
+            }
+            break;
+        DEFAULT
+            ogs_error("Not implemented [%s]", array[1]);
+            break;
+        END
+        break;
+    DEFAULT
+        ogs_error("Not implemented [%s]", array[0]);
+        break;
+    END
+
+    //ogs_free(tmp);
+    //return eph_pub_key;
+    return 0;
+   
+    
 }
 
 char *ogs_supi_from_supi_or_suci(char *supi_or_suci)

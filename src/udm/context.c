@@ -179,6 +179,7 @@ udm_ue_t *udm_ue_add(char *suci)
     }
 
     udm_ue->supi = ogs_supi_from_supi_or_suci(udm_ue->suci);
+    // 5G_AKA_FS 
     if (!udm_ue->supi) {
         ogs_error("No memory for udm_ue->supi [%s]", suci);
         ogs_free(udm_ue->suci);
@@ -186,6 +187,14 @@ udm_ue_t *udm_ue_add(char *suci)
         ogs_pool_id_free(&udm_ue_pool, udm_ue);
         return NULL;
     }
+    // add public key from suci 
+    char eph_pub_key_string[OGS_KEYSTRLEN(32)];
+    ogs_eph_pub_key_from_suci(udm_ue->suci, udm_ue->eph_pub_key);
+    
+    ogs_hex_to_ascii(udm_ue->eph_pub_key, sizeof(udm_ue->eph_pub_key),
+                        eph_pub_key_string, sizeof(eph_pub_key_string));
+    ogs_debug("[5G-AKA-FS][Ephemeral Public Key from UE] [%s]",eph_pub_key_string);
+
 
     ogs_hash_set(self.suci_hash, udm_ue->suci, strlen(udm_ue->suci), udm_ue);
     ogs_hash_set(self.supi_hash, udm_ue->supi, strlen(udm_ue->supi), udm_ue);
