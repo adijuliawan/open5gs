@@ -43,7 +43,7 @@ extern int __ausf_log_domain;
 
 #define EAP_AKA_PRIME_EXTENSION 0
 
-#define AKA_FS_EXTENSION 1
+#define AKA_FS_EXTENSION 0
 
 
 typedef struct ausf_context_s {
